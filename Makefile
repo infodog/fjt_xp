@@ -26,7 +26,8 @@ install: install-modules-yes
 
 #   cleanup
 clean:
-	-rm -f mod_fjt.o mod_fjt.lo mod_fjt.slo mod_fjt.la 
+	-rm -f *.o *.lo *.slo *.la
+#	-rm -f mod_fjt.o mod_fjt.lo mod_fjt.slo mod_fjt.la 
 
 #   simple test
 test: reload

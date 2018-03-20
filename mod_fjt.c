@@ -35,39 +35,421 @@
 **    Content-Type: text/html
 **  
 **    The sample page from mod_fjt.c
-*/ 
+*/
 
 #include "httpd.h"
 #include "http_config.h"
 #include "http_protocol.h"
 #include "ap_config.h"
+#include "config.h"
+#include "config_utils.h"
 
 /* The sample content handler */
 static int fjt_handler(request_rec *r)
 {
-    if (strcmp(r->handler, "fjt")) {
+    if (strcmp(r->handler, "fjt"))
+    {
         return DECLINED;
     }
-    r->content_type = "text/html";      
+    r->content_type = "text/html";
 
     if (!r->header_only)
         ap_rputs("The sample page from mod_fjt.c\n", r);
     return OK;
 }
 
+static const command_rec fjt_cmds[] = {
+
+    /* add by wpf */
+    AP_INIT_TAKE1("ProxyCookieDomain", add_cookie_domain, NULL, ACCESS_CONF, "Add a cookie domain for the set-cookie header"),
+    AP_INIT_TAKE1("ProxyUrlPrefix", add_url_prefix, NULL, ACCESS_CONF, "Add a prefix to the url contained in the location header."),
+    AP_INIT_TAKE1("HKBindUrl", add_hkword_prefix, NULL, ACCESS_CONF, "Install the temporary font for hongkong word."),
+    AP_INIT_TAKE1("InsertCSS", add_insert_css, NULL, ACCESS_CONF, "Insert the special CSS in front of </head>."),
+    AP_INIT_TAKE1("SetBaseUrl", set_base_url, NULL, ACCESS_CONF, "Set the base url when use absolute url"),
+    AP_INIT_TAKE1("RedirectTipString", redirect_tip_string, NULL, ACCESS_CONF, "The tip string of redirect url"),
+    AP_INIT_TAKE1("RedirectTipURL", redirect_tip_url, NULL, ACCESS_CONF, "The tip string of redirect to the newconf url .... "),
+    AP_INIT_TAKE1("ProxySUrlPrefix", add_surl_prefix, NULL, ACCESS_CONF, "Add a prefix to the url contained in the location header."),
+    AP_INIT_TAKE1("UseTable", use_table, NULL, ACCESS_CONF, "Select words table."),
+    AP_INIT_TAKE1("ProxyJsPrefix", add_js_prefix, NULL, ACCESS_CONF, "Add a prefix to the js located in the html file."),
+    AP_INIT_TAKE1("ProxyHTTPPrefix", add_http_prefix, NULL, ACCESS_CONF, "Add a prefix to the http:// located in the html file."),
+    AP_INIT_TAKE1("ProxyFramePrefix", add_frame_prefix, NULL, ACCESS_CONF, "Add a prefix to the frame located in the html file."),
+    AP_INIT_TAKE1("ProxyExtraData", add_extra_data, NULL, ACCESS_CONF, "the data in addition to which from the real server."),
+    AP_INIT_FLAG("ProxyRedirectAbsolute", set_redirect_absolute, NULL, ACCESS_CONF, "on if the url in location header should change to absolute url"),
+    AP_INIT_FLAG("ProxyExtraDataIgnoreJs", set_extra_data_ignore_js, NULL, ACCESS_CONF, "on if the the url end with js should not be added extra data even the mime is text/html"),
+    AP_INIT_FLAG("ProxyShouldExpandJs", set_should_expand_js, NULL, ACCESS_CONF, "on if the the url end with js should not be added extra data even the mime is text/html"),
+    AP_INIT_TAKE1("FromEncode", set_from_encode, NULL, ACCESS_CONF, "Set the internal encoding of the real server."),
+    AP_INIT_TAKE1("ToEncode", set_to_encode, NULL, ACCESS_CONF, "Set the external encoding of the real server."),
+    AP_INIT_FLAG("ChangeUrlInServer", set_change_url_in_server, NULL, ACCESS_CONF, "on if we should parse the html file and js file to change every url"),
+    AP_INIT_FLAG("ConvertWord", set_convert_word, NULL, ACCESS_CONF, "Should Convert word."),
+    AP_INIT_FLAG("IsUnicode", set_is_unicode, NULL, ACCESS_CONF, "Change Unicode."),
+    AP_INIT_FLAG("IsUTF-8", set_is_utf8, NULL, ACCESS_CONF, "The Content-Type is UTF-8"),
+    AP_INIT_FLAG("PostdataResetUrl", postdata_reset_url, NULL, ACCESS_CONF, "Reset the url in the postdata"),
+    AP_INIT_FLAG("AutoUseUnicode", auto_use_unicode, NULL, ACCESS_CONF, "Auto use unicode encodeing"),
+    AP_INIT_FLAG("ForceOutputUnicode", force_output_unicode, NULL, ACCESS_CONF, "Force to convert all output data to unicode encoding"),
+    AP_INIT_FLAG("ProcessWord", process_word, NULL, ACCESS_CONF, "use for convert word .doc file"),
+    AP_INIT_FLAG("IgnoreUrlEncode", ignore_urlencode, NULL, ACCESS_CONF, "process url (unconvert) ignore the url encode"),
+    AP_INIT_FLAG("UnConvertWholeUrl", unconvert_whole_url, NULL, ACCESS_CONF, "process url ... unconvert whole url chinese "),
+    AP_INIT_FLAG("NoMimeNoConvert", nomime_noconvert, NULL, ACCESS_CONF, "If have no MIME type then not convert it"),
+    AP_INIT_FLAG("NotSetContentTypeCharset", notset_contenttype_charset, NULL, ACCESS_CONF, "not set content-type:charset "),
+    AP_INIT_TAKE1("MarkUTF8Url", mark_utf8url, NULL, ACCESS_CONF, "If marked the url in UTF8 page"),
+    AP_INIT_TAKE1("UnescapeChar", need_unescape, NULL, ACCESS_CONF, "The web page has escape char nust unescape it first"),
+    AP_INIT_TAKE1("OutputEscapeChar", output_escape_char, NULL, ACCESS_CONF, "output escape char like : %%uA8A9 ... "),
+    AP_INIT_FLAG("NotConvertGetPostData", notconvert_getpostdata, NULL, ACCESS_CONF, "Not convert browser get or post data"),
+    AP_INIT_FLAG("NotModifyContentType", notmodify_contenttype, NULL, ACCESS_CONF, "Not modify the HTTP header Content-type: "),
+    AP_INIT_FLAG("IgnoreUrlPrefix", ignore_urlprefix, NULL, ACCESS_CONF, "Ignore the url prefix such as : ProxyUrlPrefix	"),
+    AP_INIT_FLAG("UseUnicodeTable", use_unicode_table, NULL, ACCESS_CONF, "When convert UTF8 data use unicode word table and rule table!"),
+    AP_INIT_FLAG("OutputSameEncode", output_same_encode, NULL, ACCESS_CONF, "Convert web page use the same encode but not same shape!"),
+    AP_INIT_FLAG("KeepUTF8Encode", keep_utf8_encode, NULL, ACCESS_CONF, "If orig web page is utf8 then output utf8 encode!"),
+    AP_INIT_FLAG("TreatScriptAsHtml", treat_script_as_html, NULL, ACCESS_CONF, "Treat script as html . parse html format."),
+    AP_INIT_FLAG("IgnorePostDataEncode", ignore_postdata_encode, NULL, ACCESS_CONF, "ignore post data encode . not decode and encode. "),
+    AP_INIT_FLAG("NotDetectAttachment", notdetect_attachment, NULL, ACCESS_CONF, "convert post attachment file such as : .htm .txt"),
+    AP_INIT_FLAG("PostRawDataAsUTF8", post_rawdata_asutf8, NULL, ACCESS_CONF, "post raw data as utf8 ... not convert data "),
+    AP_INIT_FLAG("UnescapePostData", unescape_postdata, NULL, ACCESS_CONF, "unescape %u.... format POST data "),
+    AP_INIT_FLAG("HandleOLDURL", handle_oldurl_as_seekphoto, NULL, ACCESS_CONF, "process other type page as seekphoto . to auto fetch page ."),
+    AP_INIT_FLAG("PostDataIsUTF8", postdata_is_utf8, NULL, ACCESS_CONF, "post data is utf8 encode. "),
+    AP_INIT_FLAG("EscapeUTF8Char", escape_utf8_char, NULL, ACCESS_CONF, "unescape utf8 encode char %ab%cd ."),
+    AP_INIT_FLAG("ForceOutputUTF8", force_output_utf8, NULL, ACCESS_CONF, "Force to convert all output data to utf8 encoding"),
+    AP_INIT_FLAG("ForcePostUTF8", force_post_utf8, NULL, ACCESS_CONF, "Force to post data as utf8 encoding"),
+    AP_INIT_FLAG("NotConvertPage", not_convert_page, NULL, ACCESS_CONF, "Not Convert Page url ... "),
+    AP_INIT_FLAG("UseOrigProxy", use_orig_proxy, NULL, ACCESS_CONF, "use orig proxy do it ... "),
+    AP_INIT_FLAG("NotProcessPercent25", not_process_percent25, NULL, ACCESS_CONF, "not process %25 ... "),
+    AP_INIT_FLAG("RedirectTip", redirect_tip, NULL, ACCESS_CONF, "whether tips when redirect url"),
+    AP_INIT_FLAG("ProcessPicture", process_picture, NULL, ACCESS_CONF, "If process picture in page"),
+    AP_INIT_FLAG("UnconvertOutput", set_is_UnconvertOutput, NULL, ACCESS_CONF, "Unconvert the Output page!"),
+    AP_INIT_FLAG("NotChangeTextboxUrl", set_is_NotChangeTextboxUrl, NULL, ACCESS_CONF, "Not change textbox url!"),
+    AP_INIT_FLAG("NotSetCookie", set_is_NotSetCookie, NULL, ACCESS_CONF, "Not Set-Cookie!"),
+    AP_INIT_FLAG("ResumeLogs", set_is_ResumeLogs, NULL, ACCESS_CONF, "Resume url in log file(ifbase)"),
+    AP_INIT_FLAG("DetectUTF8", set_is_DetectUTF8, NULL, ACCESS_CONF, "Auto detect UTF8 coding!"),
+    AP_INIT_TAKE1("DetectUTF8BOM", set_is_DetectUTF8BOM, NULL, ACCESS_CONF, "Auto detect UTF8 coding use BOM table !"),
+    AP_INIT_FLAG("ChangedUrlEncode", set_is_ChangedUrlEncode, NULL, ACCESS_CONF, "Browser changed the url encodeing"),
+    AP_INIT_FLAG("NotSetLastModified", set_is_nocache, NULL, ACCESS_CONF, "Not cache the page"),
+    AP_INIT_FLAG("InConvertUnicode", set_in_convert_unicode, NULL, ACCESS_CONF, "On will change Unicode when input."),
+    AP_INIT_FLAG("SeekPhoto", set_seekphoto, NULL, ACCESS_CONF, "Seek Photo."),
+    AP_INIT_FLAG("GetClientIP", set_getclientip, NULL, ACCESS_CONF, "Get Client IP."),
+    AP_INIT_FLAG("HasHKWord", set_has_hkword, NULL, ACCESS_CONF, "The web page has hongkong word."),
+    AP_INIT_FLAG("InShouldConvert", set_in_should_convert, NULL, ACCESS_CONF, "Should Convert input?"),
+    AP_INIT_FLAG("InShouldConvertWord", set_in_should_convert_word, NULL, ACCESS_CONF, "Should Convert input with word table?"),
+    AP_INIT_FLAG("ReplaceHttpInText", set_replace_http_in_text, NULL, ACCESS_CONF, "Replace Http In Text."),
+    AP_INIT_FLAG("AddTrailigSlash", set_add_trailing_slash, NULL, ACCESS_CONF, "Add Trailing Slash while build abs url."),
+    AP_INIT_TAKE1("ExtraCookie", set_extra_cookie, NULL, ACCESS_CONF, "The Extra Cookie we set."),
+    AP_INIT_TAKE1("UnconvertSymbol", set_unconvertsymbol, NULL, ACCESS_CONF, "Set unconvert charset symbol. such as: <!--big5--> "),
+    AP_INIT_TAKE1("SetContentType", set_setcontenttype, NULL, ACCESS_CONF, "Set page charset such as: charset=GBK"),
+    AP_INIT_TAKE1("ChangeChineseLevel", set_change_chinese_level, NULL, ACCESS_CONF, "Set Change Chinese Level."),
+    AP_INIT_TAKE1("RedirectTipTime", redirect_tip_time, NULL, ACCESS_CONF, "Time of Redirect url to tip"),
+    AP_INIT_TAKE1("NativeDomain", set_native_domain, NULL, ACCESS_CONF, "Set native which will not use abs url when the requesting domain is 'native'."),
+    AP_INIT_TAKE1("CookiePathMode", set_cookie_path_mode, NULL, ACCESS_CONF, "Set the cookie path mode, 0:Use /, 1:Use /gate/big5/www.infoscape.com.cn/"),
+    AP_INIT_TAKE2("UrlMap", set_url_map, NULL, ACCESS_CONF, "UrlMap fromUrl toUrl, Change fromUrl to toUrl."),
+    AP_INIT_TAKE2("UrlMapNE", set_url_mapNE, NULL, ACCESS_CONF, "UrlMapNE fromUrl toUrl, Change fromUrl to toUrl not encode url."),
+    AP_INIT_TAKE2("UrlModify", set_url_modify, NULL, ACCESS_CONF, "UrlModify fromUrl toUrl, Change fromUrl to toUrl not encode url."),
+    AP_INIT_TAKE2("UrlMapJS", set_url_mapJS, NULL, ACCESS_CONF, "UrlMapJS mapUrl append, append something after the url."),
+
+    AP_INIT_TAKE1("ProcessScriptLevel", set_process_script_level, NULL, ACCESS_CONF, "Set the Process Script Level."),
+    AP_INIT_TAKE1("ScriptChangeChineseLevel", set_script_change_chinese_level, NULL, ACCESS_CONF, "Set Change Chinese Level of script."),
+    AP_INIT_TAKE1("ChangeScriptByDefault", set_change_script_by_default, NULL, ACCESS_CONF, "In Process tag, if ChangeScriptByDefault is 1, then use ChangeScript instead of ReplaceHTTP."),
+    AP_INIT_TAKE1("ValueChangeChinese", set_value_change_chinese, NULL, ACCESS_CONF, "When Process tag, use ChangeChineseLevel to change the value."),
+    AP_INIT_TAKE2("ConvertDomain", set_convert_domain, NULL, RSRC_CONF, "A list of domains which is allowed!"),
+    AP_INIT_TAKE2("AddrDomain", set_addr_domain, NULL, RSRC_CONF, "set hosts like : 127.0.0.1  localhost!"),
+    AP_INIT_FLAG("HostUseAddrPort", set_host_addr_port, NULL, RSRC_CONF, "when use AddrDomain ,then the HTTP header Host: ... use Addr:port "),
+    AP_INIT_TAKE1("WebPageMaxSize", set_page_size, NULL, RSRC_CONF, "The maximum webpage size in Kb"),
+    AP_INIT_TAKE1("BinaryFileExt", set_binfile_ext, NULL, RSRC_CONF, "Set the not convert binary files ext"),
+    AP_INIT_TAKE1("HtmlFileExt", set_htmlfile_ext, NULL, RSRC_CONF, "Set the must convert html files extern info"),
+    AP_INIT_TAKE1("KeepUrlSuffix", set_keepurlsuffix_ext, NULL, RSRC_CONF, "Set the unchange url extern info. such as .gif .zip etc"),
+    AP_INIT_FLAG("EnableConvertAPI", set_enable_convert_api, NULL, RSRC_CONF, "Add a cookie domain for the set-cookie header"),
+    AP_INIT_FLAG("ForceRedirectTip", force_redirect_tip, NULL, ACCESS_CONF, "Force tips when redirect url"),
+
+    AP_INIT_FLAG("ForceConvertPage", force_convert_page, NULL, ACCESS_CONF, "Force convert the web page"),
+    AP_INIT_FLAG("SendURLsAsUTF8", send_url_utf, NULL, ACCESS_CONF, "Send urls as utf-8"),
+    AP_INIT_FLAG("NotReplaceUrl", not_replace_url, NULL, ACCESS_CONF, "Not replace the url which changeurl not process"),
+    AP_INIT_FLAG("ConvertCookie", convert_cookie, NULL, ACCESS_CONF, "Convert chinese in cookie HZ etc"),
+    AP_INIT_FLAG("ConvertContentDisposition", convert_ContentDisposition, NULL, ACCESS_CONF, "Convert chinese in ContentDisposition HZ etc"),
+    AP_INIT_FLAG("MergeCookie", merge_cookie, NULL, ACCESS_CONF, "merge same key/value in cookie"),
+    AP_INIT_FLAG("AddUrlPrefixToParameter", AddUrlPrefixToParameter, NULL, ACCESS_CONF, "AddUrlPrefixToParameter"),
+    {NULL}
+
+};
+
 static void fjt_register_hooks(apr_pool_t *p)
 {
     ap_hook_handler(fjt_handler, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
+static void *my_create_dir_conf(apr_pool_t *p, char *x)
+{
+    config *conf = apr_pcalloc(p, sizeof(config));
+    conf->m_pcBaseUrl = apr_pcalloc(p, 128);
+    conf->m_pcCookieDomain = apr_pcalloc(p, 128);
+    conf->m_pcExtraData = apr_pcalloc(p, 128);
+    conf->m_pcFramePrefix = apr_pcalloc(p, 128);
+    conf->m_pcHTTPPrefix = apr_pcalloc(p, 128);
+    conf->m_pcJsPrefix = apr_pcalloc(p, 128);
+    conf->m_pcPath = apr_pcalloc(p, 128);
+    conf->m_pcSUrlPrefix = apr_pcalloc(p, 128);
+    conf->m_usetable = NULL;
+    conf->m_pcHkPrefix = apr_pcalloc(p, 128);
+    conf->m_pcInsertCSS = apr_pcalloc(p, 128);
+    conf->m_pcConfBaseUrl = apr_pcalloc(p, 1024);
+    conf->m_pcRedirectTipString = apr_pcalloc(p, 4096);
+    conf->m_pcRedirectTipURL = apr_pcalloc(p, 1024);
+    conf->m_iForceRedirectTip = -1;
+    conf->m_iForceConvertPage = -1;
+    conf->m_iSendURLsAsUTF8 = -1;
+    conf->m_iNotReplaceUrl = -1;
+    conf->m_iConvertCookie = -1;
+    conf->m_iConvertContentDisposition = -1;
+    conf->m_iMergeCookie = -1;
+    conf->m_iAddUrlPrefixToParameter = -1;
+    conf->m_pcUrlPrefix = apr_pcalloc(p, 128);
+    conf->m_pcExtraCookie = apr_pcalloc(p, 128);
+    conf->m_pcUnconvertSymbol = apr_pcalloc(p, 128);
+    conf->m_pcSetContentType = apr_pcalloc(p, 128);
+    conf->m_iShouldExpandJs = -1;
+    conf->m_iRedirectTipTime = -1;
+    conf->m_iIsRedirectAbsolute = -1;
+    conf->m_iShouldChangeUrlInServer = -1;
+    conf->m_iExtraDataIgnoreJs = -1;
+    conf->m_iFromEncode = -1;
+    conf->m_iToEncode = -1;
+    conf->m_iConvertWord = -1;
+    conf->m_iIsUnicode = -1;
+    conf->m_iIsUTF8 = -1;
+    conf->m_iPostdataResetUrl = -1;
+    conf->m_iAutoUseUnicode = -1;
+    conf->m_iForceOutputUnicode = -1;
+    conf->m_iProcessWord = -1;
+    conf->m_iIgnoreUrlEncode = -1;
+    conf->m_iUnConvertWholeUrl = -1;
+    conf->m_iNoMimeNoConvert = -1;
+    conf->m_iNotSetContentTypeCharset = -1;
+    conf->m_iMarkUTF8Url = -1;
+    conf->m_iUnescapeChar = -1;
+    conf->m_iOutputEscapeChar = -1;
+    conf->m_iNotConvertGetPostData = -1;
+    conf->m_iNotModifyContentType = -1;
+    conf->m_iIgnoreUrlPrefix = -1;
+    conf->m_iUseUnicodeTable = -1;
+    conf->m_iOutputSameEncode = -1;
+    conf->m_iKeepUTF8Encode = -1;
+    conf->m_iTreatScriptAsHtml = -1;
+    conf->m_iIgnorePostDataEncode = -1;
+    conf->m_iNotDetectAttachment = -1;
+    conf->m_iPostRawDataAsUTF8 = -1;
+    conf->m_iUnescapePostData = -1;
+    conf->m_iHandleOLDURL = -1;
+    conf->m_iPostDataIsUTF8 = -1;
+    conf->m_iEscapeUTF8Char = -1;
+    conf->m_iForceOutputUTF8 = -1;
+    conf->m_iForcePostUTF8 = -1;
+    conf->m_iNotConvertPage = -1;
+    conf->m_iUseOrigProxy = -1;
+    conf->m_iNotProcessPercent25 = -1;
+    conf->m_iRedirectTip = -1;
+    conf->m_iProcessPicture = -1;
+    conf->m_iUnconvertOutput = -1;
+    conf->m_iNotChangeTextboxUrl = -1;
+    conf->m_iNotSetCookie = -1;
+    conf->m_iResumeLogs = -1;
+    conf->m_iDetectUTF8 = -1;
+    conf->m_iDetectUTF8BOM = -1;
+    conf->m_iChangedUrlEncode = -1;
+    conf->m_iNoCache = -1;
+    conf->m_iSeekPhoto = -1;
+    conf->m_iGetClientIP = -1;
+    conf->m_iIshkword = -1;
+    conf->m_iInShouldConvert = -1;
+    conf->m_iInConvertWord = -1;
+    conf->m_iCookiePathMode = -1;
+    conf->m_pUrlMap = apr_table_make(p, 100);
+    conf->m_pUrlMapNE = apr_table_make(p, 100);
+    conf->m_pUrlModify = apr_table_make(p, 100);
+    conf->m_pUrlMapJS = apr_table_make(p, 100);
+    conf->m_pUseTableFile = apr_table_make(p, 10);
+    conf->m_iProcessScriptLevel = -1;
+    conf->m_iReplaceHttpInText = -1;
+    conf->m_iAddTrailingSlash = -1;
+    conf->m_iScriptChangeChineseLevel = -1;
+    conf->m_iChangeScriptByDefault = -1;
+    conf->m_iValueChangeChineseLevel = -1;
+    conf->m_iInConvertUnicode = -1;
+
+    /* Set up the default values for fields of dir */
+    return conf;
+}
+
+static void *my_merge_dir_conf(apr_pool_t *pool, void *BASE, void *ADD)
+{
+    config *base = BASE;
+    config *add = ADD;
+    config *conf = apr_palloc(pool, sizeof(config));
+
+    { /* // WPF  */
+
+        conf->m_pcCookieDomain = (add->m_pcCookieDomain[0] == 0) ? base->m_pcCookieDomain : add->m_pcCookieDomain;
+        conf->m_pcUrlPrefix = (add->m_pcUrlPrefix[0] == 0) ? base->m_pcUrlPrefix : add->m_pcUrlPrefix;
+        conf->m_pcHkPrefix = (add->m_pcHkPrefix[0] == 0) ? base->m_pcHkPrefix : add->m_pcHkPrefix;
+        conf->m_pcInsertCSS = (add->m_pcInsertCSS[0] == 0) ? base->m_pcInsertCSS : add->m_pcInsertCSS;
+        conf->m_pcConfBaseUrl = (add->m_pcConfBaseUrl[0] == 0) ? base->m_pcConfBaseUrl : add->m_pcConfBaseUrl;
+        conf->m_pcRedirectTipString = (add->m_pcRedirectTipString[0] == 0) ? base->m_pcRedirectTipString : add->m_pcRedirectTipString;
+        conf->m_pcRedirectTipURL = (add->m_pcRedirectTipURL[0] == 0) ? base->m_pcRedirectTipURL : add->m_pcRedirectTipURL;
+        conf->m_iForceRedirectTip = (add->m_iForceRedirectTip == -1) ? 0 : add->m_iForceRedirectTip;
+        conf->m_iForceConvertPage = (add->m_iForceConvertPage == -1) ? 0 : add->m_iForceConvertPage;
+        conf->m_iSendURLsAsUTF8 = (add->m_iSendURLsAsUTF8 == -1) ? 0 : add->m_iSendURLsAsUTF8;
+        conf->m_iNotReplaceUrl = (add->m_iNotReplaceUrl == -1) ? 0 : add->m_iNotReplaceUrl;
+        conf->m_iConvertCookie = (add->m_iConvertCookie == -1) ? 0 : add->m_iConvertCookie;
+        conf->m_iConvertContentDisposition = (add->m_iConvertContentDisposition == -1) ? 0 : add->m_iConvertContentDisposition;
+        conf->m_iMergeCookie = (add->m_iMergeCookie == -1) ? 0 : add->m_iMergeCookie;
+        conf->m_iAddUrlPrefixToParameter = (add->m_iAddUrlPrefixToParameter == -1) ? 0 : add->m_iAddUrlPrefixToParameter;
+        conf->m_pUseTableFile = (add->m_pUseTableFile == NULL) ? base->m_pUseTableFile : add->m_pUseTableFile;
+        conf->m_pcJsPrefix = (add->m_pcJsPrefix[0] == 0) ? base->m_pcJsPrefix : add->m_pcJsPrefix;
+        conf->m_pcHTTPPrefix = (add->m_pcHTTPPrefix[0] == 0) ? base->m_pcHTTPPrefix : add->m_pcHTTPPrefix;
+        conf->m_pcFramePrefix = (add->m_pcFramePrefix[0] == 0) ? base->m_pcFramePrefix : add->m_pcFramePrefix;
+        conf->m_pcExtraData = (add->m_pcExtraData[0] == 0) ? base->m_pcExtraData : add->m_pcExtraData;
+        conf->m_iIsRedirectAbsolute = (add->m_iIsRedirectAbsolute == -1) ? base->m_iIsRedirectAbsolute : add->m_iIsRedirectAbsolute;
+        conf->m_iExtraDataIgnoreJs = (add->m_iExtraDataIgnoreJs == -1) ? base->m_iExtraDataIgnoreJs : add->m_iExtraDataIgnoreJs;
+        conf->m_iShouldExpandJs = (add->m_iShouldExpandJs == -1) ? base->m_iShouldExpandJs : add->m_iShouldExpandJs;
+        conf->m_iShouldChangeUrlInServer = (add->m_iShouldChangeUrlInServer == -1) ? base->m_iShouldChangeUrlInServer : add->m_iShouldChangeUrlInServer;
+        conf->m_iFromEncode = (add->m_iFromEncode == -1) ? base->m_iFromEncode : add->m_iFromEncode;
+        conf->m_iToEncode = (add->m_iFromEncode == -1) ? base->m_iToEncode : add->m_iToEncode;
+        conf->m_iConvertWord = (add->m_iConvertWord == -1) ? base->m_iConvertWord : add->m_iConvertWord;
+        conf->m_iIsUnicode = (add->m_iIsUnicode == -1) ? base->m_iIsUnicode : add->m_iIsUnicode;
+        conf->m_iIsUTF8 = (add->m_iIsUTF8 == -1) ? 0 : add->m_iIsUTF8;
+        conf->m_iPostdataResetUrl = (add->m_iPostdataResetUrl == -1) ? 0 : add->m_iPostdataResetUrl;
+        conf->m_iAutoUseUnicode = (add->m_iAutoUseUnicode == -1) ? 0 : add->m_iAutoUseUnicode;
+        conf->m_iForceOutputUnicode = (add->m_iForceOutputUnicode == -1) ? 0 : add->m_iForceOutputUnicode;
+        conf->m_iProcessWord = (add->m_iProcessWord == -1) ? 0 : add->m_iProcessWord;
+        conf->m_iIgnoreUrlEncode = (add->m_iIgnoreUrlEncode == -1) ? 0 : add->m_iIgnoreUrlEncode;
+        conf->m_iUnConvertWholeUrl = (add->m_iUnConvertWholeUrl == -1) ? 0 : add->m_iUnConvertWholeUrl;
+        conf->m_iNoMimeNoConvert = (add->m_iNoMimeNoConvert == -1) ? 0 : add->m_iNoMimeNoConvert;
+        conf->m_iNotSetContentTypeCharset = (add->m_iNotSetContentTypeCharset == -1) ? 0 : add->m_iNotSetContentTypeCharset;
+        conf->m_iMarkUTF8Url = (add->m_iMarkUTF8Url == -1) ? 0 : add->m_iMarkUTF8Url;
+        conf->m_iUnescapeChar = (add->m_iUnescapeChar == -1) ? 0 : add->m_iUnescapeChar;
+        conf->m_iOutputEscapeChar = (add->m_iOutputEscapeChar == -1) ? 0 : add->m_iOutputEscapeChar;
+        conf->m_iNotConvertGetPostData = (add->m_iNotConvertGetPostData == -1) ? 0 : add->m_iNotConvertGetPostData;
+        conf->m_iNotModifyContentType = (add->m_iNotModifyContentType == -1) ? 0 : add->m_iNotModifyContentType;
+        conf->m_iIgnoreUrlPrefix = (add->m_iIgnoreUrlPrefix == -1) ? 0 : add->m_iIgnoreUrlPrefix;
+        conf->m_iUseUnicodeTable = (add->m_iUseUnicodeTable == -1) ? 0 : add->m_iUseUnicodeTable;
+        conf->m_iOutputSameEncode = (add->m_iOutputSameEncode == -1) ? 0 : add->m_iOutputSameEncode;
+        conf->m_iKeepUTF8Encode = (add->m_iKeepUTF8Encode == -1) ? 0 : add->m_iKeepUTF8Encode;
+        conf->m_iTreatScriptAsHtml = (add->m_iTreatScriptAsHtml == -1) ? 0 : add->m_iTreatScriptAsHtml;
+        conf->m_iPostDataIsUTF8 = (add->m_iPostDataIsUTF8 == -1) ? 0 : add->m_iPostDataIsUTF8;
+        conf->m_iEscapeUTF8Char = (add->m_iEscapeUTF8Char == -1) ? 0 : add->m_iEscapeUTF8Char;
+        conf->m_iIgnorePostDataEncode = (add->m_iIgnorePostDataEncode == -1) ? 0 : add->m_iIgnorePostDataEncode;
+        conf->m_iNotDetectAttachment = (add->m_iNotDetectAttachment == -1) ? 0 : add->m_iNotDetectAttachment;
+        conf->m_iPostRawDataAsUTF8 = (add->m_iPostRawDataAsUTF8 == -1) ? 0 : add->m_iPostRawDataAsUTF8;
+        conf->m_iUnescapePostData = (add->m_iUnescapePostData == -1) ? 0 : add->m_iUnescapePostData;
+        conf->m_iHandleOLDURL = (add->m_iHandleOLDURL == -1) ? 0 : add->m_iHandleOLDURL;
+        conf->m_iForceOutputUTF8 = (add->m_iForceOutputUTF8 == -1) ? 0 : add->m_iForceOutputUTF8;
+        conf->m_iForcePostUTF8 = (add->m_iForcePostUTF8 == -1) ? 0 : add->m_iForcePostUTF8;
+        conf->m_iNotConvertPage = (add->m_iNotConvertPage == -1) ? 0 : add->m_iNotConvertPage;
+        conf->m_iUseOrigProxy = (add->m_iUseOrigProxy == -1) ? 0 : add->m_iUseOrigProxy;
+        conf->m_iNotProcessPercent25 = (add->m_iNotProcessPercent25 == -1) ? 0 : add->m_iNotProcessPercent25;
+        conf->m_iRedirectTip = (add->m_iRedirectTip == -1) ? 0 : add->m_iRedirectTip;
+        conf->m_iProcessPicture = (add->m_iProcessPicture == -1) ? 0 : add->m_iProcessPicture;
+        conf->m_iUnconvertOutput = (add->m_iUnconvertOutput == -1) ? 0 : add->m_iUnconvertOutput;
+        conf->m_iNotChangeTextboxUrl = (add->m_iNotChangeTextboxUrl == -1) ? 0 : add->m_iNotChangeTextboxUrl;
+        conf->m_iNotSetCookie = (add->m_iNotSetCookie == -1) ? 0 : add->m_iNotSetCookie;
+        conf->m_iResumeLogs = (add->m_iResumeLogs == -1) ? 0 : add->m_iResumeLogs;
+        conf->m_iDetectUTF8 = (add->m_iDetectUTF8 == -1) ? 0 : add->m_iDetectUTF8;
+        conf->m_iDetectUTF8BOM = (add->m_iDetectUTF8BOM == -1) ? 0 : add->m_iDetectUTF8BOM;
+        conf->m_iChangedUrlEncode = (add->m_iChangedUrlEncode == -1) ? 0 : add->m_iChangedUrlEncode;
+        conf->m_iNoCache = (add->m_iNoCache == -1) ? 0 : add->m_iNoCache;
+        conf->m_iSeekPhoto = (add->m_iSeekPhoto == -1) ? base->m_iSeekPhoto : add->m_iSeekPhoto;
+        conf->m_iGetClientIP = (add->m_iGetClientIP == -1) ? base->m_iGetClientIP : add->m_iGetClientIP;
+        conf->m_iIshkword = (add->m_iIshkword == -1) ? base->m_iIshkword : add->m_iIshkword;
+        conf->m_iInShouldConvert = (add->m_iInShouldConvert == -1) ? base->m_iInShouldConvert : add->m_iInShouldConvert;
+        conf->m_iInConvertWord = (add->m_iInConvertWord == -1) ? base->m_iInConvertWord : add->m_iInConvertWord;
+        conf->m_pcExtraCookie = (add->m_pcExtraCookie[0] == 0) ? base->m_pcExtraCookie : add->m_pcExtraCookie;
+        conf->m_pcUnconvertSymbol = (add->m_pcUnconvertSymbol[0] == 0) ? base->m_pcUnconvertSymbol : add->m_pcUnconvertSymbol;
+        conf->m_pcSetContentType = (add->m_pcSetContentType[0] == 0) ? base->m_pcSetContentType : add->m_pcSetContentType;
+        conf->m_iChangeChineseLevel = (add->m_iChangeChineseLevel == 0) ? base->m_iChangeChineseLevel : add->m_iChangeChineseLevel;
+        conf->m_iRedirectTipTime = (add->m_iRedirectTipTime == 0) ? base->m_iRedirectTipTime : add->m_iRedirectTipTime;
+        conf->m_pcNativeDomain = (add->m_pcNativeDomain == 0) ? base->m_pcNativeDomain : add->m_pcNativeDomain;
+        conf->m_iCookiePathMode = (add->m_iCookiePathMode == -1) ? base->m_iCookiePathMode : add->m_iCookiePathMode;
+        conf->m_iProcessScriptLevel = (add->m_iProcessScriptLevel == -1) ? base->m_iProcessScriptLevel : add->m_iProcessScriptLevel;
+        conf->m_pUrlMap = (add->m_pUrlMap == 0) ? base->m_pUrlMap : add->m_pUrlMap;
+        conf->m_pUrlMapNE = (add->m_pUrlMapNE == 0) ? base->m_pUrlMapNE : add->m_pUrlMapNE;
+        conf->m_pUrlModify = (add->m_pUrlModify == 0) ? base->m_pUrlModify : add->m_pUrlModify;
+        conf->m_pUrlMapJS = (add->m_pUrlMapJS == 0) ? base->m_pUrlMapJS : add->m_pUrlMapJS;
+        conf->m_iReplaceHttpInText = (add->m_iReplaceHttpInText == -1) ? base->m_iReplaceHttpInText : add->m_iReplaceHttpInText;
+        conf->m_iAddTrailingSlash = (add->m_iAddTrailingSlash == -1) ? base->m_iAddTrailingSlash : add->m_iAddTrailingSlash;
+        conf->m_iScriptChangeChineseLevel = (add->m_iScriptChangeChineseLevel == -1) ? base->m_iScriptChangeChineseLevel : add->m_iScriptChangeChineseLevel;
+        conf->m_iChangeScriptByDefault = (add->m_iChangeScriptByDefault == -1) ? base->m_iChangeScriptByDefault : add->m_iChangeScriptByDefault;
+        conf->m_iValueChangeChineseLevel = (add->m_iValueChangeChineseLevel == -1) ? base->m_iValueChangeChineseLevel : add->m_iValueChangeChineseLevel;
+        conf->m_iInConvertUnicode = (add->m_iInConvertUnicode == -1) ? base->m_iInConvertUnicode : add->m_iInConvertUnicode;
+    }
+    return conf;
+}
+
+static void *my_create_server_config(apr_pool_t *p, server_rec *s)
+{
+    svr_config *conf = apr_pcalloc(p, sizeof(svr_config));
+
+    conf->nYesDomain = 0;
+    conf->nExcludeDomain = 0;
+    conf->nFriendlyDomain = 0;
+    conf->timeCheckPoint = 0;
+    conf->allowed_domain = apr_table_make(p, 100);
+    conf->exclude_domain = apr_table_make(p, 100);
+    conf->friendly_domain = apr_table_make(p, 100);
+
+    conf->nAddrDomain = 0;
+    conf->addr_domain = NULL;
+    conf->m_iHostAddrPort = 0;
+    conf->m_iHostAddrPort_set = 0;
+
+    conf->WebPageMaxSize = 0;
+    conf->WebPageMaxSize_set = 0;
+    conf->m_iExportApi = 0;
+    conf->m_iExportApi_set = 0;
+    conf->m_iBinaryFileExt = 0;
+    conf->m_iHtmlFileExt = 0;
+    conf->m_iKeepUrlSuffix = 0;
+    return conf;
+}
+
+static void *my_merge_svr_config(apr_pool_t *p, void *basev, void *overridesv)
+{
+    svr_config *newconf = apr_pcalloc(p, sizeof(svr_config));
+    svr_config *base = (svr_config*)basev;
+    svr_config *overrides = (svr_config*)overridesv;
+
+    newconf->nYesDomain = (overrides->nYesDomain == 0) ? base->nYesDomain : overrides->nYesDomain;
+    newconf->nExcludeDomain = (overrides->nExcludeDomain == 0) ? base->nExcludeDomain : overrides->nExcludeDomain;
+    newconf->nFriendlyDomain = (overrides->nFriendlyDomain == 0) ? base->nFriendlyDomain : overrides->nFriendlyDomain;
+    newconf->timeCheckPoint = (overrides->timeCheckPoint == 0) ? base->timeCheckPoint : overrides->timeCheckPoint;
+    newconf->allowed_domain = (overrides->nYesDomain == 0) ? base->allowed_domain : overrides->allowed_domain;
+    newconf->exclude_domain = (overrides->nExcludeDomain == 0) ? base->exclude_domain : overrides->exclude_domain;
+    newconf->friendly_domain = (overrides->nFriendlyDomain == 0) ? base->friendly_domain : overrides->friendly_domain;
+
+    newconf->nAddrDomain = (overrides->nAddrDomain == 0) ? base->nAddrDomain : overrides->nAddrDomain;
+    newconf->addr_domain = (overrides->nAddrDomain == 0) ? base->addr_domain : overrides->addr_domain;
+    newconf->m_iHostAddrPort = (overrides->m_iHostAddrPort_set == 0) ? base->m_iHostAddrPort : overrides->m_iHostAddrPort;
+
+    newconf->WebPageMaxSize = (overrides->WebPageMaxSize_set == 0) ? base->WebPageMaxSize : overrides->WebPageMaxSize;
+    newconf->m_iExportApi = (overrides->m_iExportApi_set == 0) ? base->m_iExportApi : overrides->m_iExportApi;
+    memcpy(newconf->m_pcBinaryFileExt, base->m_pcBinaryFileExt, sizeof(newconf->m_pcBinaryFileExt));
+    newconf->m_iBinaryFileExt = base->m_iBinaryFileExt;
+    memcpy(newconf->m_pcHtmlFileExt, base->m_pcHtmlFileExt, sizeof(newconf->m_pcHtmlFileExt));
+    newconf->m_iHtmlFileExt = base->m_iHtmlFileExt;
+    memcpy(newconf->m_pcKeepUrlSuffix, base->m_pcKeepUrlSuffix, sizeof(newconf->m_pcKeepUrlSuffix));
+    newconf->m_iKeepUrlSuffix = base->m_iKeepUrlSuffix;
+    { /* // WPF 2003-9-12 */
+        if (newconf->nYesDomain < 1)
+        {
+            ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
+                         "[error] Invalidation License for FJT or configuration file is bad!");
+            exit(-1);
+        }
+    }
+    return newconf;
+}
+
 /* Dispatch list for API hooks */
 module AP_MODULE_DECLARE_DATA fjt_module = {
-    STANDARD20_MODULE_STUFF, 
-    NULL,                  /* create per-dir    config structures */
-    NULL,                  /* merge  per-dir    config structures */
-    NULL,                  /* create per-server config structures */
-    NULL,                  /* merge  per-server config structures */
-    NULL,                  /* table of config file commands       */
-    fjt_register_hooks  /* register hooks                      */
+    STANDARD20_MODULE_STUFF,
+    my_create_dir_conf,      /* create per-dir    config structures */
+    my_merge_dir_conf,       /* merge  per-dir    config structures */
+    my_create_server_config, /* create per-server config structures */
+    my_merge_svr_config,                    /* merge  per-server config structures */
+    fjt_cmds,              /* table of config file commands       */
+    fjt_register_hooks       /* register hooks                      */
 };
-
