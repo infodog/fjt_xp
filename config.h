@@ -294,6 +294,8 @@ typedef struct ConvertCtx
 	int nNotChangeTextboxUrl;
 
 	request_rec *r;
+	svr_config *svr_conf;
+	config *dir_conf;
 
 	int nIsWord;
 

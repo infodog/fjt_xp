@@ -39,7 +39,7 @@ const char *add_url_prefix(cmd_parms *cmd, void *dummy, const char *ss){
     }
 
     {/* // WPF Begin it. */
-        char *info = ss;
+        const char *info = ss;
 
         static int i = 0;
         static char str[128] = {'\0'};
@@ -1642,7 +1642,7 @@ const char *merge_cookie(cmd_parms *cmd, void *dummy, int flag)
     return NULL;
 }
 
-const char *AddUrlPrefixToParameter(cmd_parms *cmd, void *dummy, int flag)
+const char *add_url_prefix_to_parameter(cmd_parms *cmd, void *dummy, int flag)
 {
 
     ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,

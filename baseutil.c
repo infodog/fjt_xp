@@ -6,7 +6,6 @@
 #include "baseutil.h"
 #include "convert.h"
 #include "apr_base64.h"
-#include "mod_proxy.h"
 
 #define API_EXPORT(x) x
 #ifdef CHARSET_EBCDIC
@@ -368,6 +367,7 @@ int UrlDecodeHZ(char *inbuf, int insize, char *outbuf, int *outsize)
 	*outsize = (unsigned int)pout - (unsigned int)outbuf ; 
 	return 1; 
 }
+
 
 char* UnConvertUrl(ConvertCtx *pctx, pool *apool, config *pconfig, char *url)
 {
@@ -1297,14 +1297,12 @@ int IsPicture(char *url, config *pcon)
 	return 0; 
 }
 
-int KeepUrlSuffix(ConvertCtx *apCtx, config *pconf, char *pUrl)
+int KeepUrlSuffix(ConvertCtx *apCtx, config *dconf, char *pUrl)
 {
-	static proxy_server_conf *conf = NULL;
+	svr_config *conf = apCtx->svr_conf;
 	
 	if (conf == NULL) {
-		void *sconf = apCtx->r->server->module_config;
-		module *proxy_module = ap_find_linked_module("mod_proxy.c");
-		conf = (proxy_server_conf *) ap_get_module_config(sconf, proxy_module);	
+
 		if (conf == NULL) {
 			return 0;
 		}

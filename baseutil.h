@@ -46,6 +46,8 @@ char* UrlUnMap(config *pconf, pool *apool, char *pabsurl);
 char* url_reset_prefix(char *u, char *s, char *d, pool *p);
 char* url_http_proxy(char *url, char *http, char *proxy, pool *p);
 char* trimstr(char *str);
+int UrlDecodeHZ(char *inbuf, int insize, char *outbuf, int *outsize);
+int UrlEncodeHZ(char *inbuf, int insize, char *outbuf);
 
 #ifndef WIN32
 void itoa(int num,char *str,int base);

@@ -43,6 +43,9 @@
 #include "ap_config.h"
 #include "config.h"
 #include "config_utils.h"
+#include "baseutil.h"
+#include "convert.h"
+#include "mod_fjt.h"
 
 /* The sample content handler */
 static int fjt_handler(request_rec *r)
@@ -54,14 +57,141 @@ static int fjt_handler(request_rec *r)
     r->content_type = "text/html";
 
     if (!r->header_only)
-        ap_rputs("The sample page from mod_fjt.c\n", r);
+        ap_rputs("FJT is licensed  to FJT corporation.\n", r);
     return OK;
 }
 
-static const command_rec fjt_cmds[] = {
 
+static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb){
+    return APR_SUCCESS;
+}
+
+
+static apr_status_t fjt_in_filter(ap_filter_t *f, apr_bucket_brigade *bb,
+                                    ap_input_mode_t mode, apr_read_type_e block,
+                                    apr_off_t readbytes){
+    apr_status_t rv;
+    config *dc = ap_get_module_config(f->r->per_dir_config,
+                                             &fjt_module);
+    apr_size_t buffer_size;
+    int hit_eos;
+
+    ap_log_rerror(APLOG_MARK, APLOG_TRACE5, 0, f->r, APLOGNO(08001)"fjt input filter filename=%s",
+                  f->r->filename);
+
+    /* just get out of the way of things we don't want. */
+    if (mode != AP_MODE_READBYTES) {
+        return ap_get_brigade(f->next, bb, mode, block, readbytes);
+    }
+
+    //打印出来：
+    return ap_get_brigade(f->next, bb, mode, block, readbytes);
+}
+
+/* find_code_page() is a fixup hook that checks if the module is
+ * configured and the input or output potentially need to be translated.
+ * If so, context is initialized for the filters.
+ */
+static int find_code_page(request_rec *r){
+    config *dc = ap_get_module_config(r->per_dir_config,
+                                             &fjt_module);
+
+    svr_config *svr_conf =
+            (svr_config *) ap_get_module_config(r->server->module_config, &fjt_module);
+
+    /* catch proxy requests */
+    if (!r->proxyreq) {
+        //fjt只针对proxy起作用
+        return DECLINED;
+    }
+
+    /* mod_rewrite indicators */
+    if (!r->filename
+        || strncmp(r->filename, "proxy:", 6)) {
+        return DECLINED;
+    }
+
+    ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)"fjt find_code_page filename=%s,r->uri=%s,r->unparsed_uri=%s",
+                  r->filename,r->uri,r->unparsed_uri);
+
+    if(dc->m_iFromEncode!=dc->m_iToEncode){
+        fjtconf *session = (fjtconf*)apr_palloc(r->pool,sizeof(fjtconf)) ;
+        session->p = r->pool;
+        session->oldurl = r->filename;
+        session->pctx.r = r;
+        session->pctx.dir_conf = dc;
+        session->pctx.svr_conf = svr_conf;
+
+
+        char *uri = r->filename;
+        char *pquery = strchr(r->filename,'?');
+        if(pquery==NULL){
+            return DECLINED;
+        }
+        char *path  = apr_palloc(r->pool,strlen(r->filename+1));
+        strcpy(path,uri);
+        pquery = strchr(path,'?');
+        *pquery = 0;
+        pquery++;
+
+
+
+        ap_set_module_config(r->request_config, &fjt_module, session);
+
+
+        char tembuf[6000];
+
+        //假设url都是utf-8
+        char *outbuf = NULL;
+        int outlen = 0;
+        int nsize = 0;
+
+        nsize = strlen(pquery);
+        if(nsize>sizeof(tembuf)-1024){
+            return DECLINED;
+        }
+        UrlDecodeHZ(pquery, nsize, tembuf, &outlen);
+
+        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)"fjt find_code_page after UrlDecodeHZ, tembuf=%s,outlen=%i",
+                      tembuf,outlen);
+        char *puni = apr_palloc(r->pool,outlen*2);
+        int num = utf82unicode(tembuf, outlen, puni, &session->pctx, FEFF);
+        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)"fjt find_code_page after utf82unicode, puni=%s,num=%i",
+                      puni,num);
+        int from, to;
+        from = dc->m_iToEncode;
+        to = dc->m_iFromEncode;
+
+        char* pconvertedUni = apr_palloc(r->pool,num*2);
+        num = ConvertUnicodeExt(from,to,dc->m_iConvertWord,puni,num,pconvertedUni);
+
+        char* putf8 = apr_palloc(r->pool,num*3);
+        num = unicode2utf8(pconvertedUni,num,0,putf8);
+
+        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)"fjt find_code_page after unicode2utf8, putf8=%s,num=%i",
+                      putf8,num);
+
+        //最后进行urlEncode;
+        outbuf = apr_palloc(r->pool,num*3);
+        num = UrlEncodeHZ(putf8,num,outbuf);
+
+        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)"fjt find_code_page after UrlEncodeHZ, outbuf=%s,num=%i",
+                      outbuf,num);
+//        r->uri = outbuf;
+        char *newfilename = apr_pstrcat(r->pool,path,"?",outbuf);
+        r->filename = newfilename;
+
+        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)"filename after convert=%s",
+                      r->filename);
+
+        return OK;
+    }
+    return DECLINED;
+}
+
+static const command_rec fjt_cmds[] = {
     /* add by wpf */
-    AP_INIT_TAKE1("ProxyCookieDomain", add_cookie_domain, NULL, ACCESS_CONF, "Add a cookie domain for the set-cookie header"),
+    AP_INIT_TAKE1("ProxyCookieDomain",add_cookie_domain, NULL, ACCESS_CONF, "Add a cookie domain for the set-cookie header"),
     AP_INIT_TAKE1("ProxyUrlPrefix", add_url_prefix, NULL, ACCESS_CONF, "Add a prefix to the url contained in the location header."),
     AP_INIT_TAKE1("HKBindUrl", add_hkword_prefix, NULL, ACCESS_CONF, "Install the temporary font for hongkong word."),
     AP_INIT_TAKE1("InsertCSS", add_insert_css, NULL, ACCESS_CONF, "Insert the special CSS in front of </head>."),
@@ -163,13 +293,14 @@ static const command_rec fjt_cmds[] = {
     AP_INIT_FLAG("ConvertCookie", convert_cookie, NULL, ACCESS_CONF, "Convert chinese in cookie HZ etc"),
     AP_INIT_FLAG("ConvertContentDisposition", convert_ContentDisposition, NULL, ACCESS_CONF, "Convert chinese in ContentDisposition HZ etc"),
     AP_INIT_FLAG("MergeCookie", merge_cookie, NULL, ACCESS_CONF, "merge same key/value in cookie"),
-    AP_INIT_FLAG("AddUrlPrefixToParameter", AddUrlPrefixToParameter, NULL, ACCESS_CONF, "AddUrlPrefixToParameter"),
+    AP_INIT_FLAG("AddUrlPrefixToParameter", add_url_prefix_to_parameter, NULL, ACCESS_CONF, "add_url_prefix_to_parameter"),
     {NULL}
 
 };
 
 static void fjt_register_hooks(apr_pool_t *p)
 {
+    ap_hook_fixups(find_code_page, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_handler(fjt_handler, NULL, NULL, APR_HOOK_MIDDLE);
 }
 

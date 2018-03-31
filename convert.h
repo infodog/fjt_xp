@@ -15,6 +15,7 @@ int unconvert_orig(ruletable** pctx,char *inbuf,int insize,memstream *pstream,co
 int  unconvert(ruletable** pctx,char *inbuf,int insize,memstream *pstream,config *pcon, ConvertCtx *locaptr);
 void changeunicode(char *inbuff,int *insize,ConvertCtx *apCtx,int isunicode,int basecode);
 int  utf82unicode(char *pinput, int insize, char *pout, ConvertCtx *apCtx, int twobytes);
+int unicode2utf8(char *pins, int nsize, int exchange, char *pout);
 char* ConvertFromUTF8_auto_unicode(char *pins, int insize, config *pcon, ConvertCtx *pctx, int *outSize);
 int  ConvertFromUTF8(char *pins, int insize, config *pcon, ConvertCtx *pctx);
 int  ConvertFromUTF8Ex(char *pins, int insize, int FromEncode, ConvertCtx *pctx);

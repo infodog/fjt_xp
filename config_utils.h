@@ -112,6 +112,6 @@ const char *not_replace_url(cmd_parms *cmd, void *dummy, int flag);
 const char *convert_cookie(cmd_parms *cmd, void *dummy, int flag);
 const char *convert_ContentDisposition(cmd_parms *cmd, void *dummy, int flag);
 const char *merge_cookie(cmd_parms *cmd, void *dummy, int flag);
-const char *AddUrlPrefixToParameter(cmd_parms *cmd, void *dummy, int flag);
+const char *add_url_prefix_to_parameter(cmd_parms *cmd, void *dummy, int flag);
 const char *force_convert_page(cmd_parms *cmd, void *dummy, int flag);
 #endif
