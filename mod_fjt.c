@@ -403,6 +403,13 @@ static void *my_create_dir_conf(apr_pool_t *p, char *x)
     conf->m_iInConvertUnicode = -1;
 
     /* Set up the default values for fields of dir */
+
+    //init默认的convert table
+    if (!init_convert(p)) {
+        ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
+                     "Can not Load Convert Table.");
+        exit(-1);
+    }
     return conf;
 }
 
@@ -507,6 +514,10 @@ static void *my_merge_dir_conf(apr_pool_t *pool, void *BASE, void *ADD)
         conf->m_iValueChangeChineseLevel = (add->m_iValueChangeChineseLevel == -1) ? base->m_iValueChangeChineseLevel : add->m_iValueChangeChineseLevel;
         conf->m_iInConvertUnicode = (add->m_iInConvertUnicode == -1) ? base->m_iInConvertUnicode : add->m_iInConvertUnicode;
     }
+
+    //现在已经获得了configure, 开始初始化
+
+
     return conf;
 }
 
