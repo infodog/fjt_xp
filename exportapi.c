@@ -270,7 +270,7 @@ int InitUnicodeWord(char *pbuff, char *filename)
 #ifndef ENCRYPT_WORDS
     /* fseek(fp, 0x2L, SEEK_SET); */
     /* WPF 2002-8-9 Is not unicode format remove this line */
-    fread(buff, 1, 2, fp);
+//    fread(buff, 1, 2, fp);
 #endif
     printf("filename=%s\n",filename);
     while (!feof(fp)) {

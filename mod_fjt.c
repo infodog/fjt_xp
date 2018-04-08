@@ -256,14 +256,16 @@ static int find_code_page(request_rec *r) {
          int num = utf82unicode(tembuf, outlen, puni, &session->pctx, FEFF);
 
         char *pdump = apr_palloc(r->pool, outlen * 6+1024);
-        hexDump(puni,pdump,num);
+
+       /* hexDump(puni,pdump,num);
         ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)
                 "after utf82unicode, num=%i,puni=%s",num,pdump);
-
+*/
         int from, to;
         from = dc->m_iToEncode + 2;
         to = dc->m_iFromEncode + 2;
-
+        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)
+                "from=%i,to=%i",from,to);
 
         char *pconvertedUni = apr_palloc(r->pool, num * 2);
         dc->m_iConvertWord = 0;
@@ -272,10 +274,12 @@ static int find_code_page(request_rec *r) {
 
 
         *pdump = apr_palloc(r->pool, num * 6 + 1024);
+
+       /*
         hexDump(pconvertedUni,pdump,num);
         ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)
                 "after utf82unicode, num=%i,pconvertedUni=%s",num,pdump);
-
+*/
         char *putf8 = apr_palloc(r->pool, num * 3);
         num = unicode2utf8(pconvertedUni, num, 0, putf8);
 
