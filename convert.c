@@ -57,7 +57,7 @@ char heaventest[128], lastdefense[128], fjtcopyright[128], gotourl[256], thetitl
 int init_count = 0;
 
 //Only for unicode to unicode convert
-unsigned char *UniGbUniBig, *UniBigUniGb;
+unsigned char *UniGbUniBig = NULL, *UniBigUniGb = NULL;
 ruletable *UniGbUniBigRule, *UniBigUniGbRule;
 /*-----------------------------------------------------------------------------------------------------------------------*/
 
@@ -3139,24 +3139,28 @@ int ConvertUnicode(void *info, int from, int to, int conword, char *pins, int in
 		if (conword && (wordlist->body != NULL))		
 		{
 			nOffset = (int)(wordlist->body) - nStart;
-			
+			//实际上wordlist->body == element, 因为nStart == nHead,wordlist->body - nStart + nHead == wordlist->body
 			element = (rule*)(nHead + nOffset);
 			
 			while (element != NULL)
 			{
+
 				if (pot+element->lenreal > pins+insize || memcmp(pot,element->realcode,element->lenreal))
 				{
+					//不匹配，则用下一个rule
 					if (element->link == NULL)
 					{
 						element = element->link;
 						break;
 					}
+					//相当于element == element->link
 					nOffset = (int)(element->link) - nStart;
 					element = (rule*)(nHead + nOffset);
 					continue;
 				}
 				break;
 			}
+			//匹配了，转换
 			if (element != NULL)
 			{
 				memcpy(bak,element->repcode,element->lenrep);
@@ -3191,7 +3195,7 @@ int ConvertUnicode(void *info, int from, int to, int conword, char *pins, int in
 				*bak++ = (char)high;
 				pot += 2;
 			}
-		}		
+		}
 	}
 	
 	return(bak-pout);

@@ -2023,6 +2023,8 @@ void itoa(int num,char *str,int base)
     for(j=0;i>0;j++,i--)
         *(str+j)=use[i-1];
 }
+
+
 #endif
 
 // WPF //

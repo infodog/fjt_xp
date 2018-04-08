@@ -21,7 +21,6 @@
 #endif
 
 
-void exception_handler(int sig);
 void InitUrlEncodeTable(void);
 void InitSafeTable(void);
 int ChangeUrl_Lite(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, int nsize, char **pNewurl, int *nNewUrl);

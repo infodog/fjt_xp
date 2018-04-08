@@ -271,11 +271,16 @@ int InitUnicodeWord(char *pbuff, char *filename)
     /* fseek(fp, 0x2L, SEEK_SET); */
     /* WPF 2002-8-9 Is not unicode format remove this line */
     fread(buff, 1, 2, fp);
-#endif			
+#endif
+    printf("filename=%s\n",filename);
     while (!feof(fp)) {
-        if (fread(buff, 1, 4, fp) != 4) break;		
-        *(pbuff + high * buff[0] + low * buff[1]) = buff[2];
-        *(pbuff + high * buff[0] + low * buff[1] + 1) = buff[3];		
+        if (fread(buff, 1, 4, fp) != 4) break;
+        int offset = high * buff[0] + low * buff[1];
+        printf("offset=%i,%i,%i,%i,%i\n" , offset,buff[0],buff[1],buff[2],buff[3]);
+        pbuff[offset] = buff[2];
+        pbuff[offset+1] = buff[3];
+//        *(pbuff + high * buff[0] + low * buff[1]) = buff[2];
+//        *(pbuff + high * buff[0] + low * buff[1] + 1) = buff[3];
     }
     
     fclose(fp);

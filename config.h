@@ -109,6 +109,8 @@ typedef struct hosts_addr_domain {
 
 typedef struct config
 {
+	char *location; //the location of the config;
+
 	/* the following are for HTML Parser */
 	char *m_pcBaseUrl;
 	int m_iFromEncode;
@@ -217,6 +219,7 @@ typedef struct config
 	table *m_pUrlMap;
 	table *m_pUseTableFile;
 	struct config *m_pnext;
+	struct config *m_pprev;
 
 } config;
 
