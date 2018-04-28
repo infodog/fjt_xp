@@ -1,0 +1,30 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Users/zhengxiangyang/work/fjt/fjtsrc/convert_utils.c
+convert_utils.h
+/Users/zhengxiangyang/work/fjt/fjtsrc/convert_utils.h
+sys/stat.h
+-
+stdio.h
+-
+string.h
+-
+stdlib.h
+-
+
+/Users/zhengxiangyang/work/fjt/fjtsrc/convert_utils.h
+
+/Users/zhengxiangyang/work/fjt/fjtsrc/utils/main.c
+stdio.h
+-
+stdlib.h
+-
+../convert_utils.h
+/Users/zhengxiangyang/work/fjt/fjtsrc/convert_utils.h
+
