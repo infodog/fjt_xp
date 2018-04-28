@@ -1,7 +1,8 @@
 #ifndef FJT_VERSION_H
 #define FJT_VERSION_H
 
-
+#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 /* // #define ENCRYPT_WORDS */
 
 

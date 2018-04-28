@@ -8,13 +8,16 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <fcntl.h>
-#endif 
+#include <convert_utils.h>
+
+#endif
 
 #include "config.h"
 #include "convert.h"
 #include "exportapi.h"
 #include "baseutil.h"
 #include "update.h"
+#include "convert_utils.h"
 
 /*-----------------------------------------------------------------------------------------------------------------------*/
 
@@ -32,8 +35,8 @@ typedef struct tagINPUTINFO
 	
 	unsigned char *unigbbig;
 	unsigned char *unibiggb;
-	ruletable *gbrule;
-	ruletable *bigrule;
+	ruletable **gbrule;
+	ruletable **bigrule;
 }INPUTINFO, *LPINPUTINFO;
 
 /*-----------------------------------------------------------------------------------------------------------------------*/
@@ -58,7 +61,7 @@ int init_count = 0;
 
 //Only for unicode to unicode convert
 unsigned char *UniGbUniBig = NULL, *UniBigUniGb = NULL;
-ruletable *UniGbUniBigRule, *UniBigUniGbRule;
+ruletable **UniGbUniBigRule, **reverUniGbUniBigRule, **UniBigUniGbRule,**reverUniBigUniGbRule;
 /*-----------------------------------------------------------------------------------------------------------------------*/
 
 char dir[512];
@@ -353,14 +356,11 @@ char* ismine(request_rec *r, char *url, pool *p, int *flag)
 
 int InitConverttable()
 {
-	FILE *fp;
 	char buf[256];
-	unsigned char c1,c2,c3,c4;	
-	
 	buf[0] = '\0';
-	
-	memset(gb2big5,255,sizeof(gb2big5));
-	memset(big52gb,255,sizeof(gb2big5));	
+	printf("init convert table .......\n");
+	memset(gb2big5,0,sizeof(gb2big5));
+	memset(big52gb,0,sizeof(gb2big5));
 #ifdef WIN32	
 	getdir(dir,sizeof(dir));
 	strcat(dir,"etc\\gb2big5v2.cvt");	
@@ -368,167 +368,26 @@ int InitConverttable()
 #else
 	getdir(buf, sizeof(buf));
 	strcat(buf, "etc/gb2big5v2.cvt");
-	fp = fopen(buf, "rb");
 #endif
-	if (!fp) return 0;	
-	while (!feof(fp)) {
-		if (!fread(&c1,1,1,fp)) { LOG("ERROR in loading the convert ruletable!\n");break;}
-		if (!fread(&c2,1,1,fp)) { LOG("ERROR in loading the convert ruletable!\n"); fclose(fp);return 0;}
-		if (!fread(&c3,1,1,fp)) { LOG("ERROR in loading the convert ruletable!\n"); fclose(fp);return 0;}
-		if (!fread(&c4,1,1,fp)) { LOG("ERROR in loading the convert ruletable!\n"); fclose(fp);return 0;}
-#ifdef ENCRYPT_WORDS
-		/* WPF 2002-8-9 Exchange c1 and c3 to decode */
-		gb2big5[c3][c2][0]=c1;
-		gb2big5[c3][c2][1]=c4;
-#else
-		gb2big5[c1][c2][0]=c3;
-		gb2big5[c1][c2][1]=c4;
-#endif		
-	}  
-	fclose(fp);
+	InitWordTable(gb2big5,buf);
 	
 #ifdef WIN32
 	getdir(dir,sizeof(dir));
 	strcat(dir,"etc\\big52gbv2.cvt");
-	fp = fopen(dir, "rb");
 #else
 	getdir(buf, sizeof(buf));
 	strcat(buf, "etc/big52gbv2.cvt");
-	fp = fopen(buf, "rb");
-#endif	
-	if (!fp) return 0;
-	while (!feof(fp)) {
-		if (!fread(&c1,1,1,fp)) { LOG("ERROR in loading the convert ruletable!\n"); break;}
-		if (!fread(&c2,1,1,fp)) { LOG("ERROR in loading the convert ruletable!\n"); fclose(fp);return 0;}
-		if (!fread(&c3,1,1,fp)) { LOG("ERROR in loading the convert ruletable!\n"); fclose(fp);return 0;}
-		if (!fread(&c4,1,1,fp)) { LOG("ERROR in loading the convert ruletable!\n"); fclose(fp);return 0;}
-#ifdef ENCRYPT_WORDS		
-		/* WPF 2002-8-9 Exchange c1 and c3 to decode */
-		big52gb[c3][c2][0]=c1;
-		big52gb[c3][c2][1]=c4;
-#else
-		big52gb[c1][c2][0]=c3;
-		big52gb[c1][c2][1]=c4;
-#endif		
-	}
-	fclose(fp);	
-	
+#endif
+	InitWordTable(big52gb,buf);
 	return 1;
 }
 
-int initfile(ruletable *wordlist[], ruletable *reverselist[], char *filename, pool *p)
-{
-	FILE* fp;
-	int	  flag,word,lenreal,lenrep;
-	char  *ptr,line[RULELEN*2+32],realcode[RULELEN],repcode[RULELEN];
-	rule  *element;
-	
-	if ((fp=fopen(filename,"r"))==NULL) return(0);
-	while (!feof(fp)) {
-#ifdef ENCRYPT_WORDS		
-		{/* WPF 2002-8-9 Decode line */
-			int n;
-			char temp[RULELEN * 4 + 32];
-			if (!fgets(temp, sizeof(temp), fp)) break;
-			{/* Delete '\r' and '\n' of temp */
-				int nln = strlen(temp);
-				if (temp[nln - 2] == '\r')
-					temp[nln - 2] = '\0';
-				else if (temp[nln - 1] == '\n')
-					temp[nln - 1] = '\0';
-				else
-					temp[nln] = '\0';
-			}
-			n = strlen(temp);
-			n = EncodeAscii(temp, n, line, 1);
-			line[n] = '\0';
-		}
-#else
-		if (!fgets(line,sizeof(line),fp)) break;
-		{/* Delete '\r' and '\n' of line */
-			int nln = strlen(line);
-			if (line[nln - 2] == '\r')
-				line[nln - 2] = '\0';
-			else if (line[nln - 1] == '\n')
-				line[nln - 1] = '\0';
-			else
-				line[nln] = '\0';
-		}		
-#endif
-		flag=0;
-		/* Not thinking '#' symbol
-		if (strchr(line,'#'))
-		flag=1;
-		*/
-		if (!(ptr = strchr(line, '\t')) || ptr == line) continue;
-		*ptr = '\0';		
-		lenreal = strlen(line);
-		if (!lenreal || (lenreal > RULELEN))
-			continue;
-		strcpy(realcode, line);
-		lenrep = strlen(ptr + 1);
-		if (!lenrep || (lenrep > RULELEN))
-			continue;
-		strcpy(repcode, ptr+1);
-		
-		word=realcode[0];
-		if ((word & 0x80)!=0) {
-			unsigned char chi = realcode[0];
-			unsigned char chw = realcode[1];
-			word = chi * 256 + chw;
-		}
-		
-		element=(rule*)apr_palloc(p, sizeof(rule));
-		element->lenreal=lenreal;
-		element->lenrep=lenrep;
-		strcpy(element->realcode,realcode);
-		strcpy(element->repcode,repcode);
-		element->flag=flag;
-		if (wordlist[word]==NULL) {
-			wordlist[word]=(ruletable*)apr_palloc(p, sizeof(ruletable));
-			element->link=NULL;	
-			wordlist[word]->body=element;
-			wordlist[word]->flag=flag;
-		}
-		else {
-			element->link=wordlist[word]->body;
-			wordlist[word]->body=element;
-			if (flag && !(wordlist[word]->flag))
-				wordlist[word]->flag=flag;
-		}
-		
-		if (reverselist != NULL) {
-			word=repcode[0];
-			if ((word & 0x80)!=0) {
-				unsigned char chi = repcode[0];
-				unsigned char chw = repcode[1];
-				word = chi * 256 + chw;
-			}
-			
-			element=(rule*)apr_palloc(p, sizeof(rule));
-			element->lenreal=lenrep;
-			element->lenrep=lenreal;
-			strcpy(element->realcode,repcode);
-			strcpy(element->repcode,realcode);
-			element->flag=flag;			
-			if (reverselist[word]==NULL) {
-				reverselist[word]=(ruletable*)apr_palloc(p, sizeof(ruletable));
-				element->link=NULL;	
-				reverselist[word]->body=element;
-				reverselist[word]->flag=flag;
-			}
-			else {
-				element->link=reverselist[word]->body;
-				reverselist[word]->body=element;
-				if (flag && !(reverselist[word]->flag))
-					reverselist[word]->flag=flag;
-			}			
-		}		
-	} 
-	
-	fclose(fp); 	
-	return(1);
-}
+
+
+
+
+
+
 
 /*-----------------------------------------------------------------------------------------------------------------------*/
 
@@ -1277,7 +1136,7 @@ int makefont_eot(char *string, char *prefix, int num)
 	int  ilst = strlen(addfontlast);
 	
 	memset(numstr, '\0', sizeof(numstr));
-	memset(string, '\0', sizeof(string));
+//	memset(string, '\0', sizeof(string));
 	itoa(num, numstr, 10);
 	len = strlen(numstr);
 	memcpy(ptr, addfont, ipre);	
@@ -1370,7 +1229,7 @@ int makeword_eot(char *string,unsigned char ch1,unsigned char ch2,int num)
 	int  lensuc = strlen(sucfont);
 	
 	memset(numstr, '\0', sizeof(numstr));
-	memset(string, '\0', sizeof(string));
+//	memset(string, '\0', sizeof(string));
 	memcpy(ptr, prefont, lenpre);
 	ptr += lenpre;
 	itoa(num, numstr, 10);
@@ -2179,6 +2038,185 @@ int ConvertToUTF8Ex(int fromencode, char *pins, int insize, char *pout, config *
 	return AnsiToUTF8(usetable, pins, insize, pout);
 }
 
+rule *matchRule(ruletable **ruletables,char *inbuf, int insize, int isUtf16){
+	int word = 0;
+	if(isUtf16) {
+		unsigned char c1 = inbuf[0];
+		unsigned char c2 = inbuf[1];
+		word = (c1 * 256 + c2);
+	}
+	else{
+        unsigned char c1 = inbuf[0];
+		if(c1 & 0x80){
+            unsigned char c2 = inbuf[1];
+			word = (c1 * 256 + c2);
+		}
+		else{
+			word = c1;
+		}
+	}
+
+	ruletable *table = ruletables[word];
+	if(table!=NULL) {
+		int nLeft = insize;
+		for (int ruleIdx = 0; ruleIdx < table->num_rule; ruleIdx++) {
+			rule *r = table->rules[ruleIdx];
+			if (nLeft < r->lenreal) {
+				//这一个不满足，比较一下看看是否需要继续
+				if (memcmp(inbuf, r->realcode, nLeft) < 0) {
+					//rules是从低到高排列，前面的比较小，所以后面只会更大，就不需要去查了。
+					break;
+				}
+			}
+			int compare = memcmp(inbuf, r->realcode, r->lenreal);
+			if (compare == 0) {
+				return r;
+			} else if (compare < 0) {
+				return NULL;
+			} else if (compare > 0) {
+				continue;
+			}
+		}
+		return NULL;
+	}
+	else{
+		return NULL;
+	}
+}
+
+int convert_lite_buf(ruletable** ruletables, char *wordTable, char *inbuf, int insize,unsigned char *pbuf,int nbuf,int isUtf16){
+    unsigned char *pendOut = pbuf + nbuf;
+    unsigned char *pcurOut = pbuf;
+
+	char *pcur = inbuf;
+	char *pend = inbuf + insize;
+	while(pcur<pend) {
+		rule *r = matchRule(ruletables, pcur, pend - pcur, isUtf16);
+		if (r != NULL) {
+//			memstream_write(pstream, r->repcode, r->lenrep);
+			if(pcurOut + r->lenrep > pendOut){
+				return -1; // not enough space
+			}
+			memcpy(pcurOut,r->repcode,r->lenrep);
+			pcurOut+=r->lenrep;
+			pcur += r->lenreal;
+		}
+		else{
+			//没有找到rule,只用用字表进行转换
+			if(isUtf16){
+				unsigned char c1 = pcur[0];
+				unsigned char c2 = pcur[1];
+				int word = (c1*256+c2)*2;
+
+				unsigned char buf[2];
+				buf[0] = wordTable[word];
+				buf[1] = wordTable[word+1];
+				if(buf[0]==0 && buf[1]==0){
+					buf[0] = c1;
+					buf[1] = c2;
+				}
+				if(pcurOut + 2 > pendOut){
+					return -1;
+				}
+				else{
+					pcurOut[0] = buf[0];
+					pcurOut[1] = buf[1];
+				}
+				pcurOut+=2;
+				pcur+=2;
+			}
+			else{
+				int c1 = pcur[0];
+				if(c1 & 0x80 == 0){
+					//单字节
+//					memstream_write(pstream,pcur,1);
+					if(pcurOut+1 > pendOut){
+						return -1;
+					}
+					pcurOut[0] = c1;
+					pcurOut+=1;
+					pcur+=1;
+				}
+				else{
+					int c1 = pcur[0];
+					int c2 = pcur[1];
+					int word = (c2*256+c1)*2;
+					unsigned char buf[2];
+					buf[0] = wordTable[word];
+					buf[1] = wordTable[word+1];
+					if(buf[0]==0 && buf[1]==0){
+						buf[0] = c1;
+						buf[1] = c2;
+					}
+					if(pcurOut+2 > pendOut){
+						return -1;
+					}
+					else{
+						pcurOut[0] = buf[0];
+						pcurOut[1] = buf[1];
+					}
+					pcurOut+=2;
+					pcur+=2;
+				}
+			}
+		}
+	}
+	return pcurOut - pbuf;
+}
+
+int convert_lite_memstream(ruletable** ruletables, char *wordTable, char *inbuf, int insize,memstream *pstream,int isUtf16){
+    char *pcur = inbuf;
+    char *pend = inbuf + insize;
+//    printf("convert_lite_memstream ruletables=%i\n",ruletables);
+	while(pcur<pend){
+		rule *r = matchRule(ruletables,pcur,pend-pcur,isUtf16);
+		if(r!=NULL){
+			memstream_write(pstream,(char*)r->repcode,r->lenrep);
+			pcur+=r->lenreal;
+		}
+		else{
+			//没有找到rule,只用用字表进行转换
+			if(isUtf16){
+				unsigned char c1 = pcur[0];
+				unsigned char c2 = pcur[1];
+				int word = (c1*256+c2)*2;
+
+				unsigned char buf[2];
+				buf[0] = wordTable[word];
+				buf[1] = wordTable[word+1];
+				if(buf[0]==0 && buf[1]==0){
+					buf[0] = c1;
+					buf[1] = c2;
+				}
+				memstream_write(pstream,(char*)buf,2);
+				pcur+=2;
+ 			}
+ 			else{
+				int c1 = pcur[0];
+				if((c1 & 0x80) == 0){
+					//单字节
+					memstream_write(pstream,pcur,1);
+					pcur+=1;
+				}
+				else{
+					unsigned char c1 = pcur[0];
+					unsigned char c2 = pcur[1];
+					unsigned char buf[2];
+					int word = (c1*256+c2)*2;
+					buf[0] = wordTable[word];
+					buf[1] = wordTable[word+1];
+                    if(buf[0]==0 && buf[1]==0){
+                        buf[0] = c1;
+                        buf[1] = c2;
+                    }
+					memstream_write(pstream,(char*)buf,2);
+					pcur+=2;
+				}
+			}
+		}
+	}
+}
+
 /*-----------------------------------------------------------------------------------------------------------------------*/
 
 int convert_orig_speed(ruletable** pctx,char *inbuf,int insize,memstream *pstream,config *pcon, ConvertCtx *locaptr)
@@ -2267,7 +2305,6 @@ int convert_orig_speed(ruletable** pctx,char *inbuf,int insize,memstream *pstrea
 		}
 		
 	}
-	
 	return(outsize);
 }
 
@@ -2396,7 +2433,6 @@ int convert_orig_function(ruletable** pctx,char *inbuf,int insize,memstream *pst
 	}
 	else
 		wordlist=pctx;
-	
 		/*
 		WPF 2003-4-5
 		CheckLeftBuffer(locaptr, pcon, &inbuf, &insize);
@@ -2496,7 +2532,7 @@ int convert_orig_function(ruletable** pctx,char *inbuf,int insize,memstream *pst
 									if (!strchr(ptr,'#'))
 										break;
 									ptr=strchr(ptr,'#');
-									k=ptr-element->realcode;
+									k=(unsigned char*)ptr - element->realcode;
 									sub[i]=*(pot+k);
 									ptr++;
 								}
@@ -2642,14 +2678,15 @@ int convert_orig(ruletable** pctx,char *inbuf,int insize,memstream *pstream,conf
 
 int convert(ruletable** pctx,char *inbuf,int insize,memstream *pstream,config *pcon, ConvertCtx *locaptr)
 {
-	if (locaptr->iContentIsUnicode != 1)
+	return translate(1,pcon,inbuf,insize,pstream,locaptr->p);
+	/*if (locaptr->iContentIsUnicode != 1)
 		return convert_orig(pctx, inbuf, insize, pstream, pcon, locaptr);
 	
 	{//Process Unicode content
 		int  from, to, num = 0;
 		char *buff;
-		
-		buff = apr_palloc(locaptr->p, LOGALLOCSIZE(insize * 3 / 2 + 1024));
+		int nbuff = LOGALLOCSIZE(insize * 3 / 2 + 1024);
+		buff = apr_palloc(locaptr->p, nbuff+2);
 		
 		if (pcon->m_iFromEncode == ENCODE_GB2312)
 		{
@@ -2662,11 +2699,11 @@ int convert(ruletable** pctx,char *inbuf,int insize,memstream *pstream,config *p
 			to = UNICODE_GB2312;
 		}
 		
-		num = ConvertUnicodeExt(from, to, pcon->m_iConvertWord, inbuf, insize, buff);
+		num = ConvertUnicodeExt(from, to, pcon->m_iConvertWord, inbuf, insize, buff,nbuff);
 		memstream_write(pstream, buff, num);		
 		
 		return num;		
-	}
+	}*/
 }
 
 int unconvert_orig(ruletable** pctx,char *inbuf,int insize,memstream *pstream,config *pcon, ConvertCtx *locaptr)
@@ -2695,8 +2732,9 @@ int unconvert_orig(ruletable** pctx,char *inbuf,int insize,memstream *pstream,co
 		buff = apr_palloc(locaptr->p, LOGALLOCSIZE(insize * 3 / 2 + 1024));        
 		num = utf82unicode(inbuf, insize, buff, locaptr, FFFE);
 		if (num > 0) {
-			buff2 = apr_palloc(locaptr->p, LOGALLOCSIZE(insize * 3 / 2 + 1024));
-			num = ConvertUnicodeExt(from, to, excon.m_iConvertWord, buff, num, buff2);
+			int nbuff2 = LOGALLOCSIZE(insize * 3 / 2 + 1024);
+			buff2 = apr_palloc(locaptr->p, nbuff2+2);
+			num = ConvertUnicodeExt(from, to, excon.m_iConvertWord, buff, num, buff2,nbuff2);
 			if (num > 0) {
 				num = ConvertFromUnicodeEx(pcon->m_iFromEncode, FFFE, buff2, num, buff);
 				if (num > 0) {
@@ -2787,8 +2825,10 @@ int unconvert(ruletable** pctx,char *inbuf,int insize,memstream *pstream,config 
 		buff = apr_palloc(locaptr->p, LOGALLOCSIZE(insize * 3 / 2 + 1024));        
 		num = utf82unicode(inbuf, insize, buff, locaptr, FFFE);
 		if (num > 0) {
-			buff2 = apr_palloc(locaptr->p, LOGALLOCSIZE(insize * 3 / 2 + 1024));
-			num = ConvertUnicodeExt(from, to, excon.m_iConvertWord, buff, num, buff2);
+			int nbuff2 = LOGALLOCSIZE(insize * 3 / 2 + 1024);
+			buff2 = apr_palloc(locaptr->p, nbuff2);
+
+			num = ConvertUnicodeExt(from, to, excon.m_iConvertWord, buff, num, buff2,nbuff2);
 			if (num > 0) {
 				num = ConvertFromUnicodeEx(pcon->m_iFromEncode, FFFE, buff2, num, buff);
 				if (num > 0) {
@@ -2836,83 +2876,71 @@ int unconvert(ruletable** pctx,char *inbuf,int insize,memstream *pstream,config 
 
 int InitOnlyUnicode(pool *p)
 {
-	// int heapsize = 4096 * 400;
-	int heapsize = sizeof(ruletable) * FJTMAXWORD + sizeof(rule) * 8192;
-	int buffsize = 256 * 256 * 2;
-	
-	UniGbUniBig = (unsigned char*) apr_palloc(p, buffsize);
-	UniBigUniGb = (unsigned char*) apr_palloc(p, buffsize);
-	UniGbUniBigRule = (ruletable*) apr_palloc(p, heapsize);
-	UniBigUniGbRule = (ruletable*) apr_palloc(p, heapsize);
-	
-	memset(UniGbUniBig, 0, buffsize);
-	memset(UniBigUniGb, 0, buffsize);
-	memset(UniGbUniBigRule, 0, heapsize);
-	memset(UniBigUniGbRule, 0, heapsize);
-	
-#ifdef WIN32
-	{/* Share Unicode word table */		
-		getdir(dir,sizeof(dir));
-		strcat(dir,"etc\\ungb2bigword.txt");
-		if (!InitUnicodeWord(UniGbUniBig, dir))
-			return 0;		
-		getdir(dir,sizeof(dir));
-		strcat(dir,"etc\\unbig2gbword.txt");
-		if (!InitUnicodeWord(UniBigUniGb, dir))
+	{
+		/* 初始化字表 */
+		int buffsize = FJTMAXWORD * 2;
+
+		UniGbUniBig = (unsigned char*) apr_palloc(p, buffsize);
+		UniBigUniGb = (unsigned char*) apr_palloc(p, buffsize);
+
+		memset(UniGbUniBig, 0, buffsize);
+		memset(UniBigUniGb, 0, buffsize);
+
+		char buf[512];
+		getdir(buf, sizeof(buf));
+		strcat(buf, "etc/ungb2bigword.txt");
+		if (!InitUnicodeWord((char*)UniGbUniBig, buf)){
 			return 0;
+		}
+
+		getdir(buf, sizeof(buf));
+		strcat(buf, "etc/unbig2gbword.txt");
+		if (!InitUnicodeWord(UniBigUniGb, buf)){
+			return 0;
+		}
+
 	}
-	
-	{/* Share Unicode rule table */		
-		getdir(dir, sizeof(dir));
-		strcat(dir, "etc\\ungb2bigrule.txt");		
-		{
-			char *ptr = NULL;
-			if (!InitUnicodeRule(UniGbUniBigRule, ptr, dir))				
-				return 0;
-		}
-		getdir(dir, sizeof(dir));
-		strcat(dir, "etc\\unbig2gbrule.txt");		
-		{
-			char *ptr = NULL;
-			if (!InitUnicodeRule(UniBigUniGbRule, ptr, dir))
-				return 0;
-		} 
-	}	
-#else
-	{/* Share Unicode word table */
-		{
-			char buf[512];
-			getdir(buf, sizeof(buf));
-			strcat(buf, "etc/ungb2bigword.txt");
-			if (!InitUnicodeWord(UniGbUniBig, buf))
-				return 0;
-			getdir(buf, sizeof(buf));
-			strcat(buf, "etc/unbig2gbword.txt");
-			if (!InitUnicodeWord(UniBigUniGb, buf))
-				return 0;
-		}
+
+	{
+		//初始化词表
+		UniGbUniBigRule = (ruletable **) apr_palloc(p, sizeof(ruletable *) * FJTMAXWORD);
+		reverUniGbUniBigRule = (ruletable **) apr_palloc(p, sizeof(ruletable *) * FJTMAXWORD);
+		memset(UniGbUniBigRule, 0, sizeof(ruletable *) * FJTMAXWORD);
+		memset(reverUniGbUniBigRule, 0, sizeof(ruletable *) * FJTMAXWORD);
+
+        char filename[512];
+        getdir(filename, sizeof(filename));
+        strcat(filename, "etc/gb2big5u.cvt2");
+        initFile(UniGbUniBigRule,reverUniGbUniBigRule,filename,1);
+
+
+		getdir(filename, sizeof(filename));
+		strcat(filename, "etc/gb2big5mu.cvt2");
+		initFile(UniGbUniBigRule,reverUniGbUniBigRule,filename,1);
+
+		adjust_ruletable(UniGbUniBigRule);
+		adjust_ruletable(reverUniGbUniBigRule);
+
+
+
+		UniBigUniGbRule = (ruletable **) apr_palloc(p, sizeof(ruletable *) * FJTMAXWORD);
+		reverUniBigUniGbRule = (ruletable **) apr_palloc(p, sizeof(ruletable *) * FJTMAXWORD);
+		memset(UniBigUniGbRule, 0, sizeof(ruletable *) * FJTMAXWORD);
+		memset(reverUniBigUniGbRule, 0, sizeof(ruletable *) * FJTMAXWORD);
+
+
+		getdir(filename, sizeof(filename));
+		strcat(filename, "etc/big52gbu.cvt1");
+		initFile(UniBigUniGbRule,reverUniBigUniGbRule,filename,1);
+
+		getdir(filename, sizeof(filename));
+		strcat(filename, "etc/big52gbmu.cvt1");
+		initFile(UniBigUniGbRule,reverUniBigUniGbRule,filename,1);
+
+		adjust_ruletable(UniBigUniGbRule);
+		adjust_ruletable(reverUniBigUniGbRule);
 	}
-	
-	{/* Share Unicode rule table */
-		{
-			char *ptr = NULL;
-			char buf[512];
-			getdir(buf, sizeof(buf));
-			strcat(buf, "etc/ungb2bigrule.txt");
-			if (!InitUnicodeRule(UniGbUniBigRule, ptr, buf))				
-				return 0;
-		}				
-		{
-			char *ptr = NULL;
-			char buf[260];
-			getdir(buf, sizeof(buf));
-			strcat(buf, "etc/unbig2gbrule.txt");
-			if (!InitUnicodeRule(UniBigUniGbRule, ptr, buf))
-				return 0;
-		}
-	}		
-#endif
-	
+
 	return 1;
 }
 
@@ -2951,11 +2979,11 @@ int init_convert(pool *p)
 #else
 	getdir(buf, sizeof(buf));
 	strcat(buf, "etc/gb2big5.cvt2");
-	if (!initfile(wordgbbig, NULL, buf, p))		
+	if (!initFile(wordgbbig, NULL, buf,0))
 		return(0);
 	getdir(buf, sizeof(buf));
 	strcat(buf, "etc/big52gb.cvt1");
-	if (!initfile(wordbiggb, NULL, buf, p))	
+	if (!initFile(wordbiggb, NULL, buf,0))
 		return(0);
 	getdir(buf, sizeof(buf));
 	strcat(buf, "etc/hk2gb.txt");
@@ -2965,9 +2993,12 @@ int init_convert(pool *p)
 	
 	/* initunicode_no2(...) use for Change betwen ANSI and UNICODE (UTF-8) */
 	// InitOnlyUnicode(...) Only use for Unicode convert
-	if (!initunicode() || !initunicode_no2(p) || !InitOnlyUnicode(p))
-		return(0);
-	
+	/*if (!initunicode() || !initunicode_no2(p) || !InitOnlyUnicode(p))
+		return(0);*/
+
+	if(!InitOnlyUnicode(p)){
+	    return 0;
+	}
 	return(1);
 }
 
@@ -2981,7 +3012,7 @@ int ConvertVar(void *info, int from, int to, int conword, char *pins, int insize
 	ruletable *wordlist, *pBackup;
 	
 	char *pUse;
-	int  nStart, nHead, nOffset;
+	long  nStart, nHead, nOffset;
 	
 	static int high = 256*2, low = 2;
 	unsigned char *gb2big5, *big52gb;	
@@ -3012,7 +3043,7 @@ int ConvertVar(void *info, int from, int to, int conword, char *pins, int insize
 	pot = pins;
 	bak = pout;
 	nStart = pBackup->flag;	
-	nHead = (int)pBackup;
+	nHead = (long)pBackup;
 	
 	while(pot < pins+insize)
 	{
@@ -3085,134 +3116,119 @@ int ConvertVar(void *info, int from, int to, int conword, char *pins, int insize
 	return(bak-pout);
 }
 
+
+
+
 /*-----------------------------------------------------------------------------------------------------------------------*/
 
-int ConvertUnicode(void *info, int from, int to, int conword, char *pins, int insize, char *pout)
+int ConvertUnicodeExt(int from, int to, int conword, char *pins, int insize, char *pout,int outsize)
 {
-	unsigned int word;
-	char *bak, *pot;	
-	rule *element;
-	ruletable *wordlist, *pBackup;
-	
-	char *pUse;
-	int  nStart, nHead, nOffset;
-	
-	static int nh = 256*2, nl = 2;
-	unsigned char *gb2big5, *big52gb;	
-	ruletable *wordgbbig, *wordbiggb;	
-	LPINPUTINFO ptrinfo = (LPINPUTINFO)info;
-	
-	if (ptrinfo == NULL)
-		return 0;
-	
-	gb2big5 = ptrinfo->unigbbig;
-	big52gb = ptrinfo->unibiggb;
-	wordgbbig = ptrinfo->gbrule;
-	wordbiggb = ptrinfo->bigrule;
-	
-	if (!gb2big5 || !big52gb || !wordgbbig || !wordbiggb)
-		return 0;
-	
-	if ((from == UNICODE_BIG5) && (to == UNICODE_GB2312))
-		pBackup = wordbiggb;
-	else if ((from == UNICODE_GB2312) && (to == UNICODE_BIG5))
-		pBackup = wordgbbig;
-	else
-	{
-		memcpy(pout, pins, insize);
-		return insize;
-	}
-	
-	pot = pins;
-	bak = pout;
-	nStart = pBackup->flag;	
-	nHead = (int)pBackup;
-	
-	while(pot < pins+insize)
-	{
-		word = (unsigned char)(*pot) * 256 + (unsigned char)*(pot + 1);
-		
-		pUse = (char*)pBackup;		
-		pUse += sizeof(ruletable)*word;
-		wordlist = (ruletable*)pUse;
-		
-		if (conword && (wordlist->body != NULL))		
-		{
-			nOffset = (int)(wordlist->body) - nStart;
-			//实际上wordlist->body == element, 因为nStart == nHead,wordlist->body - nStart + nHead == wordlist->body
-			element = (rule*)(nHead + nOffset);
-			
-			while (element != NULL)
-			{
 
-				if (pot+element->lenreal > pins+insize || memcmp(pot,element->realcode,element->lenreal))
-				{
-					//不匹配，则用下一个rule
-					if (element->link == NULL)
-					{
-						element = element->link;
-						break;
-					}
-					//相当于element == element->link
-					nOffset = (int)(element->link) - nStart;
-					element = (rule*)(nHead + nOffset);
-					continue;
-				}
-				break;
-			}
-			//匹配了，转换
-			if (element != NULL)
-			{
-				memcpy(bak,element->repcode,element->lenrep);
-				bak += element->lenrep;
-				pot += element->lenreal;
-			}
-		}
-		
-		if (!conword || (wordlist->body == NULL) || (element == NULL))
-		{	
-			unsigned char low, high;
-			
-			if ((from == UNICODE_GB2312) && (to == UNICODE_BIG5))		
-			{				
-				low = *(gb2big5 + (unsigned char)*pot * nh + (unsigned char)*(pot+1) * nl);			
-				high = *(gb2big5 + (unsigned char)*pot * nh + (unsigned char)*(pot+1) * nl + 1);
-			}
-			if ((from == UNICODE_BIG5) && (to == UNICODE_GB2312))		
-			{										
-				low = *(big52gb + (unsigned char)*pot * nh + (unsigned char)*(pot+1) * nl);
-				high = *(big52gb + (unsigned char)*pot * nh + (unsigned char)*(pot+1) * nl + 1);
-			}
-			
-			if ((low == 255 && high == 255) || (low == 0 && high == 0))
-			{
-				*bak++ = *pot++;
-				*bak++ = *pot++;
-			}
-			else
-			{
-				*bak++ = (char)low;
-				*bak++ = (char)high;
-				pot += 2;
-			}
-		}
+	ruletable **ruletables;
+	char *wordTable;
+	if(from == UNICODE_GB2312){
+        ruletables = UniGbUniBigRule;
+		wordTable = UniGbUniBig;
 	}
-	
-	return(bak-pout);
+	else{
+		ruletables = UniBigUniGbRule;
+		wordTable = UniBigUniGb;
+	}
+	return convert_lite_buf(ruletables,wordTable,pins,insize,pout,outsize,1);
 }
 
-/*-----------------------------------------------------------------------------------------------------------------------*/
+int ConvertUnicode_memstream(int from, int to, int conword, char *pins, int insize, memstream *pstream){
+	ruletable **ruletables;
+	unsigned char *wordTable;
+	if(from == UNICODE_GB2312){
+        ruletables = UniGbUniBigRule;
+		wordTable = UniGbUniBig;
+	}
+	else{
+		ruletables = UniBigUniGbRule;
+		wordTable = UniBigUniGb;
+	}
+	return convert_lite_memstream(ruletables,wordTable,pins,insize,pstream,1);
 
-int ConvertUnicodeExt(int from, int to, int conword, char *pins, int insize, char *pout)
-{
-	INPUTINFO info;
-	
-	info.unigbbig = UniGbUniBig;
-	info.unibiggb = UniBigUniGb;
-	info.gbrule   = UniGbUniBigRule;
-	info.bigrule  = UniBigUniGbRule;
-	
-	return ConvertUnicode(&info, from, to, conword, pins, insize, pout);
 }
-
 /*-----------------------------------------------------------------------------------------------------------------------*/
+
+
+//从内部到外部
+int translate(int inOut,config *dc,char *inbuf, int insize,memstream *outStream,pool *pool){
+    if(dc->m_iIsUTF8){
+        //从utf8==》 utf16
+        ConvertCtx ctx;
+        ctx.utf8no = 0;
+        char *puni = apr_palloc(pool, insize * 2+1024);
+        int num = utf82unicode(inbuf, insize, puni, &ctx, FEFF);
+        int from, to;
+        if(inOut){
+            to = dc->m_iToEncode + 2;
+            from = dc->m_iFromEncode + 2;
+        }
+        else{
+            from = dc->m_iToEncode + 2;
+            to = dc->m_iFromEncode + 2;
+        }
+
+        dc->m_iConvertWord = 0;
+
+        ruletable **ruletables;
+        char *wordTable;
+        if(from == UNICODE_BIG5){
+            wordTable = UniBigUniGb;
+        }
+        else{
+            wordTable = UniGbUniBig;
+        }
+        ruletables = dc->m_usetable;
+
+        memstream *conv_stream = create_memstream(pool);
+        convert_lite_memstream(ruletables,wordTable,puni,num,conv_stream,1);
+        num = get_memstream_datasize(conv_stream);
+        char *pconvertedUni = apr_palloc(pool,num+2);
+        num = memstream_read(conv_stream,pconvertedUni,num);
+        pconvertedUni[num] = 0;
+        pconvertedUni[num+1] = 0;
+
+        char *putf8 = apr_palloc(pool, num * 3);
+        num = unicode2utf8(pconvertedUni, num, 0, putf8);
+        putf8[num] = 0;
+        memstream_write(outStream,putf8,num);
+    }
+    else{
+        int from, to;
+        dc->m_iConvertWord = 0;
+
+        ruletable **ruletables;
+        char *wordTable;
+
+        if(inOut){
+            to = dc->m_iToEncode;
+            from = dc->m_iFromEncode;
+            ruletables = dc->m_usetable;
+        }
+        else{
+            from = dc->m_iToEncode;
+            to = dc->m_iFromEncode;
+            ruletables = dc->m_negtable;
+        }
+
+        if(from == BIG5){
+            wordTable = big52gb;
+        }
+        else{
+            wordTable = gb2big5;
+        }
+
+
+        memstream *conv_stream = create_memstream(pool);
+        convert_lite_memstream(ruletables,wordTable,inbuf,insize,conv_stream,0);
+        int num = get_memstream_datasize(conv_stream);
+        char *pconvertedUni = apr_palloc(pool,num+2);
+        num = memstream_read(conv_stream,pconvertedUni,num);
+        memstream_write(outStream,pconvertedUni,num);
+    }
+	return 1;
+}

@@ -390,10 +390,10 @@ char* UnConvertUrl(ConvertCtx *pctx, pool *apool, config *pconfig, char *url)
 		UrlDecodeHZ(url, nsize, tembuf, &outlen);
 		outlen = ConvertToUnicodeExt(pconfig->m_iFromEncode, FFFE, 0, tembuf, outlen, outbuf);
 		if (pconfig->m_iFromEncode == ENCODE_GB2312) {
-			outlen = ConvertUnicodeExt(UNICODE_BIG5, UNICODE_GB2312, pconfig->m_iConvertWord, outbuf, outlen, tembuf);
+			outlen = ConvertUnicodeExt(UNICODE_BIG5, UNICODE_GB2312, pconfig->m_iConvertWord, outbuf, outlen, tembuf,sizeof(tembuf));
 		}
 		else {
-			outlen = ConvertUnicodeExt(UNICODE_GB2312, UNICODE_BIG5, pconfig->m_iConvertWord, outbuf, outlen, tembuf);
+			outlen = ConvertUnicodeExt(UNICODE_GB2312, UNICODE_BIG5, pconfig->m_iConvertWord, outbuf, outlen, tembuf,sizeof(tembuf));
 		}
 		outlen = ConvertFromUnicodeEx(pconfig->m_iFromEncode, FFFE, tembuf, outlen, outbuf);
 		outbuf[outlen] = '\0';
@@ -1009,9 +1009,12 @@ char* build_absolute_path(pool *apool, ConvertCtx *apCtx, config* pconf, char *a
 	char *p, *p1, *pt = apurl + nsize; 
 	char *lpbasedomain;
 	
-	if ((nsize * 2) > (apCtx->nBuffArraySize - 256)) {
-		return NULL;
-	}
+//	if ((nsize * 2) > (apCtx->nBuffArraySize - 256)) {
+//		return NULL;
+//	}
+    if(nsize > 2048){
+        return NULL;
+    }
 	
 	baseurl = apCtx->m_pcCurrentUrl;     
 	p = apurl; 
@@ -1040,7 +1043,7 @@ char* build_absolute_path(pool *apool, ConvertCtx *apCtx, config* pconf, char *a
 	url[p1 - p] = 0; 
 	
 	if (url[0]=='?') {
-		lpNewPath = GetBuffArray(apCtx, 0, apCtx->prefix_len); 
+		lpNewPath = apr_palloc(apCtx->p,2350);
 		strcpy(lpNewPath, baseurl); 
 		{
 			char *pask = strchr(lpNewPath, '?'); 
@@ -1053,19 +1056,21 @@ char* build_absolute_path(pool *apool, ConvertCtx *apCtx, config* pconf, char *a
 	}
 	
 	if (strnchr(url, 16, ':')) {
-		lpNewPath = GetBuffArray(apCtx, 0, apCtx->prefix_len); 
+		lpNewPath = lpNewPath = apr_palloc(apCtx->p,2350);
 		strcpy(lpNewPath, url); 
 		return lpNewPath; 
 	}
-	if (*url == '/' && *(url + 1) == '/' && *(url + 2) == ':') {
+	if (*url == '/' && *(url + 1) == '/' && *(url + 2) != ':') {
+	    //处理入"//www.baidu.com/a.jpg"这样的url
 		char *pcur = strchr(baseurl, ':');
 		if (pcur != NULL) {
-			lpNewPath = GetBuffArray(apCtx, 0, apCtx->prefix_len); 
+			lpNewPath = lpNewPath = apr_palloc(apCtx->p,2350);
 			memcpy(lpNewPath, baseurl, pcur - baseurl + 1);
 			strcpy(lpNewPath + (pcur - baseurl + 1), url);
 			return lpNewPath;
 		}	
 	}
+
 	
 	p = strchr(baseurl, ':'); 
 	if (!p) {
@@ -1113,7 +1118,7 @@ char* build_absolute_path(pool *apool, ConvertCtx *apCtx, config* pconf, char *a
 	if (lpBaseUrl == NULL) {
 		return NULL;
 	}
-	lpNewPath = GetBuffArray(apCtx, 0, apCtx->prefix_len); 
+	lpNewPath =  apr_palloc(apCtx->p,2350);
 	memcpy(lpNewPath, baseurl, lpBaseUrl - baseurl + 1); 
 	lpNewPath[lpBaseUrl - baseurl + 1] = '\0'; 
 	strcat(lpNewPath, lpUrl); 	
@@ -1302,17 +1307,16 @@ int KeepUrlSuffix(ConvertCtx *apCtx, config *dconf, char *pUrl)
 	svr_config *conf = apCtx->svr_conf;
 	
 	if (conf == NULL) {
-
-		if (conf == NULL) {
-			return 0;
-		}
+		return 0;
 	}
+
 	if (conf->m_iKeepUrlSuffix > 0) {
 		int i = 0;
 		char *p = pUrl;
 		char *pend = pUrl + strlen(pUrl);
 		
 		while (p < pend) {
+			//有%和?和中文的url,都不属于keepUrlSuffix的范围
 			if ((*p & 0x80) || *p == '%' || *p == '?') {
 				return 0; 
 			}
@@ -1336,13 +1340,18 @@ int ChangeUrl(pool *apool, ConvertCtx *apCtx, config* pconf, char *apurl, int ns
 	char *p, *pquery;     
 	char *ptr = apurl;
 	char *lpbasedomain; 	
-	
+
+	if(*apurl == '#' || *apurl=='?'){
+        *pNewUrl = apurl;
+        *nNewUrl = nsize;
+        return 0;
+    }
 	if (nsize > 2048 || pconf->m_iShouldChangeUrlInServer == 0 || apCtx->nNotChangeTextboxUrl > 0) {
 		*pNewUrl = apurl; 
 		*nNewUrl = nsize; 
 		return 0; 
 	}	
-	if (pconf->m_iIgnoreUrlPrefix != 1 &&
+	if (pconf->m_iIgnoreUrlPrefix == 1 &&
 		(strnistr(apurl, pconf->m_pcUrlPrefix, nsize) != NULL ||
 		strnistr(apurl, pconf->m_pcSUrlPrefix, nsize) != NULL)
 		) {		
@@ -1352,13 +1361,16 @@ int ChangeUrl(pool *apool, ConvertCtx *apCtx, config* pconf, char *apurl, int ns
 	}
 	
 	while (ptr < apurl + nsize) {
+
+	    //TODO:2018-4-20 zxy,好像不对呀，为啥要替换？
 		if (*ptr == '\\') {
-			*ptr = '/'; 
+			*ptr = '/';
 		}
 		else if (*ptr == '?') {
 			break; 
 		}
-		else if (*ptr == '*')  {		
+		else if (*ptr == '*')  {
+		    //碰到*号就不做处理又是什么原因呢？
 			*pNewUrl = apurl; 
 			*nNewUrl = nsize; 
 			return 0; 
@@ -1371,6 +1383,7 @@ int ChangeUrl(pool *apool, ConvertCtx *apCtx, config* pconf, char *apurl, int ns
 		ptr++; 
 	}	
 	{
+	    //这里等于是 rtrim
 		char *pTail = apurl + nsize - 1; 
 		while(*pTail == ' ') {
 			pTail--; 
@@ -1383,6 +1396,9 @@ int ChangeUrl(pool *apool, ConvertCtx *apCtx, config* pconf, char *apurl, int ns
 		return 0;
 	}
 	if (strnicmp(pabsurl, "http://", 7) != 0  && strnicmp(pabsurl, "https://", 8) != 0) {
+	    //如果build出来的url不是http或者https开头，证明出错了？比如是FTP呢？
+		*pNewUrl = apurl;
+		*nNewUrl = nsize;
 		return 0;
 	}
 	
@@ -1402,8 +1418,6 @@ int ChangeUrl(pool *apool, ConvertCtx *apCtx, config* pconf, char *apurl, int ns
 	}
 	
 	{
-		// ����ط���Ҫע���ڴ����������
-		// ��Ϊ���� modify ���url��д���� GetBuffer(...) ������ڴ�顣
 		pabsurl = DoUrlModify(apool, apCtx, pconf, pabsurl);
 	}
 	
@@ -1463,13 +1477,19 @@ int ChangeUrl(pool *apool, ConvertCtx *apCtx, config* pconf, char *apurl, int ns
 	}
 	else {	
 		if (strnicmp(pabsurl, "http:", 5) == 0) {
-			p = lpbasedomain - strlen(pconf->m_pcUrlPrefix);
-			memcpy(p, pconf->m_pcUrlPrefix, strlen(pconf->m_pcUrlPrefix));
+			p = apr_palloc(apool,strlen(lpbasedomain) + strlen(pconf->m_pcUrlPrefix) + 2);
+			strcpy(p,pconf->m_pcUrlPrefix);
+			strcat(p,lpbasedomain);
 			pabsurl = p;
 		}
 		else {
-			p = lpbasedomain - strlen(pconf->m_pcSUrlPrefix);
+			/*p = lpbasedomain - strlen(pconf->m_pcSUrlPrefix);
 			memcpy(p, pconf->m_pcSUrlPrefix, strlen(pconf->m_pcSUrlPrefix));
+			pabsurl = p;*/
+
+			p = apr_palloc(apool,strlen(lpbasedomain) + strlen(pconf->m_pcSUrlPrefix) + 2);
+			strcpy(p,pconf->m_pcSUrlPrefix);
+			strcat(p,lpbasedomain);
 			pabsurl = p;
 		}
 	}
@@ -1495,6 +1515,7 @@ char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, 
 	{
 		n = nsize; 
 		while (pin < apurl + nsize) {
+			//找到回车换行
 			if (*pin != '\r' && *pin != '\n') {
 				*pout++ = *pin;                
 			}
@@ -1503,6 +1524,7 @@ char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, 
 			}
 			++pin; 
 		}
+
 		if (n != nsize) {
 			*pout = '\0'; 
 			strcpy(apurl, temp); 
@@ -1517,6 +1539,7 @@ char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, 
 			pt += 3; 
 		}
 		else if (*pt == '/') {
+			//找到第一个 "/"
 			break; 
 		}
 		++pt; 
@@ -1527,16 +1550,18 @@ char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, 
 	pb = ++pt; 
 	
 	while (pt < pend) {
-		if ((*pt & 0x80) || *pt == '%' || *pt == '\'' || *pt == '\"'
-			|| (*pt == '?' && pconf->m_iChangeChineseLevel % 2)) {
+		//有汉字，有%, 有' 有"
+		if ((*pt & 0x80) || *pt == '%' || *pt == '\'' || *pt == '\"') {
 			break; 
 		} 
 		++pt; 
 	}
+
+	//如果有问号等特殊符号,则需要base64
 	if (pt >= pend) {
 		return apurl; 
 	}
-	else if (pconf->m_iChangeChineseLevel > 2) { 
+	else if (pconf->m_iChangeChineseLevel > 0) {
 		pb = pt; 
 	}
 	
@@ -1544,7 +1569,7 @@ char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, 
 	memcpy(pnurl, apurl, pb - apurl); 
 	pout = pnurl + (pb - apurl); 
 	
-	if (pconf->m_iChangeChineseLevel < 2) {
+	if (pconf->m_iChangeChineseLevel == 1) {
 		memcpy(pout, "-ifbase1", 8); 
 		pout += 8; 
 		len = if_xbase64encode(pout, pb, pend - pb); 
@@ -1552,8 +1577,7 @@ char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, 
 		*pout = '\0'; 
 		return pnurl; 
 	}
-	
-	if (pconf->m_iChangeChineseLevel < 4) {
+	if (pconf->m_iChangeChineseLevel == 3) {
 		memcpy(pout, "-ifbase3", 8); 
 		pout += 8; 
 	}
@@ -1580,7 +1604,8 @@ char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, 
 				}
 				++ptest;
 			}
-			if (ptest == NULL) {			
+			if (ptest == NULL) {
+			    //如果有%，表明有中文
 				if (pconf->m_iChangeChineseLevel < 5) {
 					len = if_xbase64encode(buff, pb, pe - pb) - 1; 
 					if (len > 0) {                
@@ -1596,6 +1621,7 @@ char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, 
 					}
 				}
 				else {
+				    //如果大于5表明要对url进行转码，回来的时候再反转码
 					int nin = pe - pb;
 					
 					if (pout - pnurl + nin * 4 >= apCtx->nBuffArraySize) {
@@ -1608,6 +1634,7 @@ char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, 
 				}
 			}
 			else {
+				//如果根本没有中文，则直接输出
 				memcpy(pout, pb, pe - pb);
 				pout += pe - pb;
 			}
@@ -1768,8 +1795,7 @@ char* UnChangeChinese(pool *apool, config *pconfig, ConvertCtx *apCtx, char *apu
 				pb = pe;                
 			}
 		}
-		
-		*p++ = '\0'; 
+		*p++ = '\0';
 	} 
 	
 	p = pnewurl; 
@@ -1794,8 +1820,7 @@ char* UnChangeChinese(pool *apool, config *pconfig, ConvertCtx *apCtx, char *apu
 	*p++ = '\0';  
 	
 	{// WPF 
-		if ((pconfig->m_iForcePostUTF8 == 1) && (apCtx == NULL || apCtx->nUrlEncode != ENCODE_UTF8)) {
-			int nt, np = strlen(pnewurl); 
+		if ((pconfig->m_iForcePostUTF8 == 1) && (apCtx == NULL || apCtx->nUrlEncode != ENCODE_UTF8)) { int nt, np = strlen(pnewurl);
 			char utf[2560];            
 			nt = ConvertToUTF8Ex(pconfig->m_iFromEncode, pnewurl, np, utf, pconfig); 
 			if (nt != np) {

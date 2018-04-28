@@ -500,11 +500,10 @@ int ChangeScript(pool *apool, ConvertCtx *pctx, memstream *apwrite, config *pcon
 			convert(pconf->m_usetable, pcur, left, apwrite, pconf, pctx);
 		}
 	}
-	
 	return 0;
 }
 
-int UrlMapHTTP(pool *apool, ConvertCtx *apCtx, config *pconf, char *pabsurl, char **purl, int *len)
+int UrlMapHTTP(pool *apool, ConvertCtx *apCtx, config *pconf, char *pabsurl,int absurl_len, char **purl, int *len)
 {
 	array_header *reqhdrs_arr; 
 	table_entry *reqhdrs; 
@@ -522,7 +521,7 @@ int UrlMapHTTP(pool *apool, ConvertCtx *apCtx, config *pconf, char *pabsurl, cha
 		fromUrl = reqhdrs[i].key; 
 		toUrl = reqhdrs[i].val; 
 		length = strlen(fromUrl);
-		if (strnicmp(fromUrl, pabsurl, length) == 0) {
+		if (length < absurl_len && strnicmp(fromUrl, pabsurl, length) == 0) {
 			*purl = toUrl;
 			*len = strlen(toUrl);
 			return length;
@@ -560,7 +559,7 @@ int ReplaceHTTPAndConvert(ConvertCtx *pctx, memstream *apwrite, config *pconf, c
 	char *pcur;    
 	int  i = 0;
 	int  slash = 0;
-	char *str = {'\0'};
+	char *str = NULL;
 	
 	pcur = pbuf;
 	pend = pbuf + nsize - 1;    
@@ -569,69 +568,100 @@ int ReplaceHTTPAndConvert(ConvertCtx *pctx, memstream *apwrite, config *pconf, c
 		--pctx->nNotChangeTextboxUrl;
 		return 1;
 	}
-	while(pcur <= pend) {
-		p = strnistr(pcur, "HTTP", pend - pcur + 1);
-		if (p == NULL) {
-			convert(pconf->m_usetable, pcur, pend - pcur + 1, apwrite, pconf, pctx);
-			break;
+	int len = pend - pcur + 1;
+	p = strnistr(pcur,"url(",len);
+	if(p > pcur){
+	    char c = *(p-1);
+	    //如果url前面不是分隔符，比如setUrl(，这种情况就不应该转
+	    if(c!=' ' && c!=';' && c!=',' && c!='\t' && c!='\n' && c!='\r' && c!='\'' && c!='"' && c!='('){
+	        p = NULL;
+	    }
+	}
+
+	if(p!=NULL){
+		char *purlEnd = strnistr(p,")",pend - p + 1);
+		if(purlEnd!=NULL){
+			ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,p - pcur + 4);
+			char *pNewUrl;
+			int nNewUrl;
+			ChangeUrl(pctx->p, pctx, pconf, p+4,purlEnd - p - 4, &pNewUrl, &nNewUrl);
+			memstream_write(apwrite,pNewUrl,nNewUrl);
+			ReplaceHTTPAndConvert(pctx,apwrite,pconf,purlEnd,pend - purlEnd + 1);
+            return 1;
 		}
-		i = 0;
-		slash = 0;
-		if (*(p + 4) == ':') {
-			if (*(p + 5) == '/' && *(p + 6) == '/') {
-				i = 7;				
-			}
-			else if (*(p + 5) == '\\' && *(p + 6) == '/'
-				&& *(p + 7) == '\\' && *(p + 8) == '/') 
-			{
-				i = 9;				
-				slash = 1;
-			}
-			str=pconf->m_pcUrlPrefix;
+		else{
+            ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,p - pcur);
+			memstream_write(apwrite,p, 4);
+			pcur = p + 4;
+			ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,pend - pcur + 1);
+			return 1;
 		}
-		else if ((*(p + 4) == 's' || *(p + 4) == 'S') && *(p + 5) == ':') {
-			if (*(p + 6) == '/' && *(p + 7) == '/') {
-				i = 8;				
-			}
-			else if (*(p + 6) == '\\' && *(p + 7) == '/'
-				&& *(p + 8) == '\\' && *(p + 9) == '/') 
-			{
-				i = 10;	
-				slash = 1;
-			}
+
+	}
+
+	p = strnistr(pcur, "http://", pend - pcur + 1);
+	char *pdomain = NULL;
+	if(p==NULL){
+		p = strnistr(pcur, "https://", pend - pcur + 1);
+		if(p!=NULL){
+			pdomain = p + strlen("https://");
 			str=pconf->m_pcSUrlPrefix;
 		}
-		if (i != 0) {
-			convert(pconf->m_usetable, pcur, p - pcur, apwrite, pconf,pctx);
-			{// WPF 2003-11-27
-				int n, len = 0;
-				char *purl = 0;
-				n = UrlMapHTTP(pctx->p, pctx, pconf, p, &purl, &len);
-				if (n > 0) {
-					pcur = p + n;
-					memstream_write(apwrite, purl, len);
-				}
-				else {
-					pcur = p + i;
-					if (slash == 0) {
-						memstream_write(apwrite, str, strlen(str));
-					}
-					else {
-						write_to_memstream_escape_slash(apwrite, str);
-					}
-				}
-			}             
-		}		
-		else {
-			convert(pconf->m_usetable, pcur, p - pcur + 4, apwrite, pconf, pctx);            
-			pcur = p + 4;
+	}
+	else{
+		pdomain = p + strlen("http://");
+		str=pconf->m_pcUrlPrefix;
+	}
+
+	if(p!=NULL){
+		char *purlEnd = NULL;
+		if(p>pcur) {
+			char c = *(p - 1);
+
+			if (c == '\'') {
+				//寻找'
+				purlEnd = strnistr(p, "'", pend - p + 1);
+			} else if (c == '\"') {
+				purlEnd = strnistr(p, "\"", pend - p + 1);
+			} else if (c == '(') {
+				purlEnd = strnistr(p, ")", pend - p + 1);
+			}
+		}
+		if(purlEnd!=NULL){
+			ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,p - pcur);
+			char *pNewUrl;
+			int nNewUrl;
+			ChangeUrl(pctx->p, pctx, pconf, p,purlEnd - p, &pNewUrl, &nNewUrl);
+			memstream_write(apwrite,pNewUrl,nNewUrl);
+			ReplaceHTTPAndConvert(pctx,apwrite,pconf,purlEnd,pend - purlEnd + 1);
+			return 1;
+		}
+		else{
+			//如果找不到对应的结束符
+			ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,p - pcur);
+			int n, len = 0;
+			char *purl = 0;
+			n = UrlMapHTTP(pctx->p, pctx, pconf, p, pend-pcur + 1, &purl, &len);
+			if (n > 0) {
+				pcur = p + n;
+				memstream_write(apwrite, purl, len);
+				pcur = pcur + n;
+				ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,pend - pcur + 1);
+				return 1;
+			}
+			else{
+				memstream_write(apwrite, str, strlen(str));
+				ReplaceHTTPAndConvert(pctx,apwrite,pconf,pdomain,pend - pdomain + 1);
+				return 1;
+			}
+
 		}
 	}
-	
+	translate(1,pconf,pcur,pend - pcur + 1,apwrite,pctx->p);
 	return 1;
 }
 
-int ReplaceHTTPAndConvert_orig(ConvertCtx *pctx, memstream *apwrite, config *pconf, char *pbuf, int nsize)
+/*int ReplaceHTTPAndConvert_orig(ConvertCtx *pctx, memstream *apwrite, config *pconf, char *pbuf, int nsize)
 {
 	char *p;
 	char *pend;
@@ -691,7 +721,7 @@ int ReplaceHTTPAndConvert_orig(ConvertCtx *pctx, memstream *apwrite, config *pco
 			{// WPF 2003-11-27
 				int n, len = 0;
 				char *purl = 0;
-				n = UrlMapHTTP(pctx->p, pctx, pconf, p, &purl, &len);
+				n = UrlMapHTTP(pctx->p, pctx, pconf, p, pend - p +1, &purl, &len);
 				if (n > 0) {
 					pcur = p + n;
 					memstream_write(apwrite, purl, len);
@@ -711,7 +741,7 @@ int ReplaceHTTPAndConvert_orig(ConvertCtx *pctx, memstream *apwrite, config *pco
 	}
 	
 	return 1;
-}
+}*/
 
 char * GetLink(pool *apool,char *atrname, char *inbuf, int nsize)
 {
@@ -928,8 +958,8 @@ int ProcessScript(pool *apool, ConvertCtx *apCtx, config *pconf, memstream *apwr
 	char *pend;
 	char *link,*newlink;
 	int cbnewlink;
-	char jshead[]="<Script Language=Javascript>";
-	char jstail[]="</Script>";
+	char jshead[]="<script>";
+	char jstail[]="</script>";
 	
 	pend = pbuf + nsize - 1;
 	// ptage = strchr(pbuf,'>');
@@ -1115,7 +1145,7 @@ int ProcessTag(pool *apool, ConvertCtx *apCtx, config *pconf, char *ptagb, int n
 				int ic = 0;
 				char *codeptr;
 				
-				if (codeptr = strnistr(newptr, "GB2312", ptagb + nsize - newptr))
+				if ((codeptr = strnistr(newptr, "GB2312", ptagb + nsize - newptr)))
 				{
 					memcpy(tempurl, ptagb, codeptr - ptagb);
 					if (pconf->m_iForceOutputUTF8 == 1 
@@ -1132,7 +1162,7 @@ int ProcessTag(pool *apool, ConvertCtx *apCtx, config *pconf, char *ptagb, int n
 					memstream_write(apwrite, tempurl, nsize - (6 - ic));
 					return 1;
 				}
-				else if (codeptr = strnistr(newptr, "GBK", ptagb + nsize - newptr))
+				else if ((codeptr = strnistr(newptr, "GBK", ptagb + nsize - newptr)))
 				{
 					memcpy(tempurl, ptagb, codeptr - ptagb);
 					if (pconf->m_iForceOutputUTF8 == 1 
@@ -1149,7 +1179,7 @@ int ProcessTag(pool *apool, ConvertCtx *apCtx, config *pconf, char *ptagb, int n
 					memstream_write(apwrite, tempurl, nsize - (3 - ic));
 					return 1;
 				}
-				else if (codeptr = strnistr(newptr, "BIG5", ptagb + nsize - newptr))
+				else if ((codeptr = strnistr(newptr, "BIG5", ptagb + nsize - newptr)))
 				{
 					memcpy(tempurl, ptagb, codeptr - ptagb);										
 					if (pconf->m_iForceOutputUTF8 == 1 
@@ -1220,8 +1250,7 @@ int ProcessTag(pool *apool, ConvertCtx *apCtx, config *pconf, char *ptagb, int n
 			p1 = strchr(p, '=');
 			if (!p1)
 			{
-				ReplaceHTTPAndConvert(apCtx, apwrite, pconf, ptagb, nsize);
-				/*memstream_write(apwrite,ptagb,nsize);*/
+				memstream_write(apwrite,ptagb,nsize);
 				return 1;
 			}
 			else
@@ -1241,16 +1270,16 @@ int ProcessTag(pool *apool, ConvertCtx *apCtx, config *pconf, char *ptagb, int n
 					p1++;
 				}
 			}
-			ReplaceHTTPAndConvert(apCtx, apwrite, pconf, ptagb, p2 - ptagb);
-			/*memstream_write(apwrite, ptagb, p2 - ptagb);*/
+			memstream_write(apwrite, ptagb, p2 - ptagb);
 			if ((pconf->m_iKeepUTF8Encode == 1
 				&& strnicmp(p2, "UTF", 3) == 0) 
-				|| (pconf->m_iForceOutputUTF8 == 1))
+				|| (pconf->m_iForceOutputUTF8 == 1) || pconf->m_iIsUTF8==1)
 			{
 				memstream_write(apwrite,"UTF-8", 5);
 			}
 			else if (pconf->m_iToEncode == ENCODE_GB2312)
 			{
+
 				if (pconf->m_iUnconvertOutput == 1)
 					memstream_write(apwrite,"BIG5", 4);
 				else
@@ -1263,8 +1292,8 @@ int ProcessTag(pool *apool, ConvertCtx *apCtx, config *pconf, char *ptagb, int n
 				else
 					memstream_write(apwrite,"BIG5", 4);
 			}
-			ReplaceHTTPAndConvert(apCtx, apwrite, pconf, p1, pend-p1+1);
-			/*memstream_write(apwrite, p1, pend-p1+1);*/
+//			ReplaceHTTPAndConvert(apCtx, apwrite, pconf, p1, pend-p1+1);
+			memstream_write(apwrite, p1, pend-p1+1);
 			return 1;
 		}
 	}
@@ -1334,11 +1363,11 @@ int ProcessTag(pool *apool, ConvertCtx *apCtx, config *pconf, char *ptagb, int n
 		int len = nsize;
 		char *ptr = NULL, *temp = ptagb;
 		
-		if (ptr = strnistr(ptagb, "CharSet", nsize)) {
-			if (ptr = strnistr(ptr, "value", ptagb + nsize - ptr)) {
+		if ((ptr = strnistr(ptagb, "CharSet", nsize))) {
+			if ((ptr = strnistr(ptr, "value", ptagb + nsize - ptr))) {
 				int num = 0;
 				char *rtr = NULL;
-				if (rtr = strnistr(ptr, "GB2312", ptagb + nsize - ptr)) {
+				if ((rtr = strnistr(ptr, "GB2312", ptagb + nsize - ptr))) {
 					ptr = rtr;
 					num = ptr - ptagb;
 					temp = apr_palloc(apool, LOGALLOCSIZE(nsize + 8));
@@ -1347,7 +1376,7 @@ int ProcessTag(pool *apool, ConvertCtx *apCtx, config *pconf, char *ptagb, int n
 					memcpy(temp + num + 4, ptr + 6, nsize - num - 6);
 					len -= 2;					
 				}
-				else if (rtr = strnistr(ptr, "BIG5", ptagb + nsize - ptr)) {
+				else if ((rtr = strnistr(ptr, "BIG5", ptagb + nsize - ptr))) {
 					ptr = rtr;
 					num = ptr - ptagb;
 					temp = apr_palloc(apool, LOGALLOCSIZE(nsize + 8));
@@ -1582,19 +1611,21 @@ DoModiUrlTag:
 						}
 					}
 				}
-				if (apCtx->fjtignoreurl == 0) {
+				/*if (apCtx->fjtignoreurl == 0) {
 					strcat(buf,URL_DELIMITER);
 					strcat(buf,URL_TYPE_JS);
 					strcat(buf,apCtx->m_pcCurrentUrl);
 					strcat(buf, "_.js");
-				}
+				}*/
 				if (!ChangeUrl(apool, apCtx, pconf, buf, strlen(buf), &pNewUrl, &nNewUrl))
 				{
-					ReplaceHTTPAndConvert(apCtx, apwrite, pconf, ptagb, nsize);			
-					/*memstream_write(apwrite, ptagb, nsize);*/
+					ReplaceHTTPAndConvert(apCtx, apwrite, pconf, ptagb, nsize);
+//					memstream_write(apwrite, ptagb, nsize);
 					return 1;
 				}
-				
+
+
+				//2018-4-24,这段代码应该是没有用的。
 				if (*(patre + 1) == '\'' || *(patre + 1) == '\"')
 				{
 					{
@@ -1835,7 +1866,7 @@ find_again:
 				}
 				else if(stricmp(cxTagName, "base") == 0) {
 					char *p = NULL;
-					if (p = GetLink(apool, "href", ptagb, ptage - ptagb + 1)) {
+					if ((p = GetLink(apool, "href", ptagb, ptage - ptagb + 1))) {
 						apCtx->m_pcCurrentUrl = apr_pstrdup(apool, p);
 					}
 					ProcessTag(apool, apCtx, pconf, ptagb, ptage - ptagb + 1, apwrite);
@@ -2039,7 +2070,7 @@ int ParseHtml_last(pool *apool,ConvertCtx *apCtx,config *pconf,char *inbuff,int 
 					}
 					else if(stricmp(cxTagName, "base") == 0) {
 						char *p = NULL;
-						if (p = GetLink(apool, "href", ptagb, ptage - ptagb + 1)) {
+						if ((p = GetLink(apool, "href", ptagb, ptage - ptagb + 1))) {
 							apCtx->m_pcCurrentUrl = apr_pstrdup(apool, p);
 						}
 						ProcessTag(apool, apCtx, pconf, ptagb, ptage - ptagb + 1, apwrite);
@@ -2157,11 +2188,12 @@ int ParseHtml_html(pool *apool,ConvertCtx *apCtx,config *pconf,char *inbuff,int 
 					
 					if (pconf->m_iReplaceHttpInText != 1)
 					{
-						convert(pconf->m_usetable, 
+						/*convert(pconf->m_usetable,
 							ptextb, 
 							ptexte-ptextb+1,
 							apwrite,
-							pconf,apCtx);
+							pconf,apCtx);*/
+						translate(1,pconf,ptextb,ptexte-ptextb+1,apwrite,apCtx->p);
 					}
 					else
 					{
@@ -2188,11 +2220,7 @@ int ParseHtml_html(pool *apool,ConvertCtx *apCtx,config *pconf,char *inbuff,int 
 					
 					if (pconf->m_iReplaceHttpInText != 1)
 					{
-						convert(pconf->m_usetable, 
-							ptextb, 
-							ptexte-ptextb+1,
-							apwrite,
-							pconf,apCtx);
+						translate(1,pconf,ptextb,ptexte-ptextb+1,apwrite,apCtx->p);
 					}
 					else
 					{
@@ -2233,7 +2261,8 @@ int ParseHtml_html(pool *apool,ConvertCtx *apCtx,config *pconf,char *inbuff,int 
 					
 					if (!GetToken(ptagb+1,ptage-ptagb-1,cxTagName,sizeof(cxTagName)))
 					{
-						convert(pconf->m_usetable,ptagb,ptage-ptagb+1,apwrite,pconf,apCtx);
+//						convert(pconf->m_usetable,ptagb,ptage-ptagb+1,apwrite,pconf,apCtx);
+						translate(1,pconf,ptextb,ptexte-ptextb+1,apwrite,apCtx->p);
 						pcur=ptage+1;
 						break;
 					}
@@ -2270,7 +2299,7 @@ int ParseHtml_html(pool *apool,ConvertCtx *apCtx,config *pconf,char *inbuff,int 
 					}
 					else if(stricmp(cxTagName, "base") == 0) {
 						char *p = NULL;
-						if (p = GetLink(apool, "href", ptagb, ptage - ptagb + 1)) {
+						if ((p = GetLink(apool, "href", ptagb, ptage - ptagb + 1))) {
 							apCtx->m_pcCurrentUrl = apr_pstrdup(apool, p);
 						}
 						ProcessTag(apool, apCtx, pconf, ptagb, ptage - ptagb + 1, apwrite);
@@ -2536,7 +2565,7 @@ char *psplit, *ptr = temp;
 							  return 0;
 						  } 
 						  
-						  int fnMIMEtype(proxy_server_conf *conf, char *pType, char *pUrl)
+						  int fnMIMEtype(svr_config *conf, char *pType, char *pUrl)
 						  {// WPF 2002-4-30 
 							  if (pType)
 							  {
@@ -2648,7 +2677,7 @@ char *psplit, *ptr = temp;
 							  return 0;
 }
 
-int DetermineFileType(proxy_server_conf *conf, config *pconfig, char *datestr, char *url)
+int DetermineFileType(svr_config *conf, config *pconfig, char *datestr, char *url)
 {
 	if (pconfig->m_iNotConvertPage == 1) {
 		return FILETYPE_AUTO_DETECT;
@@ -3195,7 +3224,7 @@ char* filter_out_ex(fjtconf *fc, config *pcon, ConvertCtx *pctx, apr_pool_t *p,
 			return NULL;
 		}
 		memstream_read(ms, pdata, number);
-		pbuff = filter_out(&number, pdata, pcon, pctx, 0);
+		pbuff = filter_out((int*)&number, pdata, pcon, pctx, 0);
 		if (number < 1) {
 			return NULL;
 		}
@@ -3394,7 +3423,6 @@ char* ProcessCookies(pool *p, char *cookie, char *url, config *pconfig,request_r
     if (strnistr(cookie, "$D$", len) != NULL
         || strnistr(cookie, "$P$", len) != NULL) {
         
-        int lenurl = strlen(url);
         char od[512] = {'\0'};
         char op[512] = {'\0'};
         char *pbase = cookie, *puse = cookie;
@@ -3464,7 +3492,7 @@ char* ProcessCookies(pool *p, char *cookie, char *url, config *pconfig,request_r
 		ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0, r, APLOGNO(ProcessCookies02) "pret=%s",pret);
         return pret;
 	}
-    ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0, r, APLOGNO(ProcessCookies03) "returning cookie,cookie=%s,%i",cookie,cookie);
+//    ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0, r, APLOGNO(ProcessCookies03) "returning cookie,cookie=%s,%i",cookie,cookie);
     return cookie;
 }
 
@@ -3808,7 +3836,7 @@ void my_DetectUTF8BOM(fjtconf *fc, config *pconfig, ConvertCtx *pctx, char *pdat
 	}
 }
 
-apr_status_t my_pass_brigade(fjtconf *fc, request_rec *r, proxy_server_conf *conf,
+/*apr_status_t my_pass_brigade(fjtconf *fc, request_rec *r, svr_config *conf,
 							 ap_filter_t *filter, apr_bucket_brigade *bucket)
 {
 	conn_rec *c = r->connection;
@@ -3929,9 +3957,9 @@ apr_status_t my_pass_brigade(fjtconf *fc, request_rec *r, proxy_server_conf *con
 	ParseHtml_html(fc->p, pctx, pconfig, pdata, length, fc->msBody);
 	
 	return my_pass_memstream(fc, fc->msBody, r, conf, filter);
-}
+}*/
 
-apr_status_t my_flush_session(fjtconf *fc, request_rec *r, proxy_server_conf *conf, ap_filter_t *filter)
+/*apr_status_t my_flush_session(fjtconf *fc, request_rec *r, proxy_server_conf *conf, ap_filter_t *filter)
 {
     int length = 0;
     char *pdata = NULL;
@@ -4032,10 +4060,10 @@ apr_status_t my_flush_session(fjtconf *fc, request_rec *r, proxy_server_conf *co
 	}
     
     return 	my_pass_memstream(fc, fc->msBody, r, conf, filter);
-}
+}*/
 
 
-config* FindConfig(config *pcfg, char *url, request_rec *r, proxy_server_conf *conf)
+/*config* FindConfig(config *pcfg, char *url, request_rec *r, proxy_server_conf *conf)
 {
 	config *pcon = pcfg;
     
@@ -4091,10 +4119,10 @@ config* FindConfig(config *pcfg, char *url, request_rec *r, proxy_server_conf *c
 	}
     
     return pcon;
-}
+}*/
 
 
-int check_infoscape(request_rec *r, apr_pool_t *p, char *url)
+/*int check_infoscape(request_rec *r, apr_pool_t *p, char *url)
 {
 	char *info = url; 	
     static volatile int i = 0;
@@ -4161,7 +4189,7 @@ int check_infoscape(request_rec *r, apr_pool_t *p, char *url)
 	}
     
     return OK - 1;
-}
+}*/
 
 void init_session(fjtconf *session, request_rec *r, apr_pool_t *p)
 {
@@ -4195,8 +4223,8 @@ void init_session(fjtconf *session, request_rec *r, apr_pool_t *p)
     session->nflag = 1;
     session->pctx.fjtignoreurl = 0;
     session->pctx.m_istate = 0;
-	session->pctx.prefix_len = strlen(session->pconfig->m_pcSUrlPrefix) > strlen(session->pconfig->m_pcUrlPrefix) 
-		? strlen(session->pconfig->m_pcSUrlPrefix) : strlen(session->pconfig->m_pcUrlPrefix);
+/*	session->pctx.prefix_len = strlen(session->pconfig->m_pcSUrlPrefix) > strlen(session->pconfig->m_pcUrlPrefix)
+		? strlen(session->pconfig->m_pcSUrlPrefix) : strlen(session->pconfig->m_pcUrlPrefix);*/
     session->pctx.nBuffArraySize = 2850;
 	// memset(session->pctx.pBuffArray, 0, sizeof(session->pctx.pBuffArray));
     session->aprstTotal = 0;
@@ -4219,7 +4247,7 @@ void clean_session(fjtconf *session)
 	// apr_pool_clear(session->p);
 }
 
-int CheckDomain(proxy_server_conf *conf, request_rec *r, apr_pool_t *p, fjtconf *fc, char *url)
+int CheckDomain(svr_config *conf, request_rec *r, apr_pool_t *p, fjtconf *fc, char *url)
 {
 
 	ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0, r, APLOGNO(CheckDomain001) "url=%s",url);

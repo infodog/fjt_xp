@@ -20,7 +20,7 @@ int ProcessScript(pool *apool, ConvertCtx *apCtx, config *pconf, memstream *apwr
 int ParseHtml(pool *apool, ConvertCtx *apCtx, config *pconf, char *inbuf, int size, memstream *apwrite);
 int ParseHtml_html(pool *apool,ConvertCtx *apCtx,config *pconf,char *inbuff,int sizee,memstream *apwrite);
 int IsDomainValid(table *tb, char *host);
-int DetermineFileType(proxy_server_conf *conf, config *pconfig, char *datestr, char *url);
+int DetermineFileType(svr_config *conf, config *pconfig, char *datestr, char *url);
 int NeedProcess(char *pbuff, int len, config *pcon, ConvertCtx *pctx);
 char* ap_proxy_cookie_domain(pool *pool, ConvertCtx *pctx, config *pconfig, char *cookies);
 char* ResetUrl7E(char *url);
@@ -44,13 +44,25 @@ apr_size_t copy_brigade_to_memstream(apr_bucket_brigade *bb,
 apr_status_t my_pass_memstream(fjtconf *fc, memstream *ms, 
 							   request_rec *r, proxy_server_conf *conf, ap_filter_t *filter);
 void prepare_pdata_length(config *pconfig, ConvertCtx *pctx, char **pdata, int *length);
-apr_status_t my_pass_brigade(fjtconf *fc, request_rec *r, proxy_server_conf *conf,
+apr_status_t my_pass_brigade(fjtconf *fc, request_rec *r, svr_config *conf,
 							 ap_filter_t *filter, apr_bucket_brigade *bucket);
 apr_status_t my_flush_session(fjtconf *fc, request_rec *r, proxy_server_conf *conf, ap_filter_t *filter);
 config* FindConfig(config *pcfg, char *url, request_rec *r, proxy_server_conf *conf);
 int check_infoscape(request_rec *r, apr_pool_t *p, char *url);
 void init_session(fjtconf *session, request_rec *r, apr_pool_t *p);
 void clean_session(fjtconf *session);
-int CheckDomain(proxy_server_conf *conf, request_rec *r, apr_pool_t *p, fjtconf *fc, char *url);
-
+int UrlMapHTTP(pool *apool, ConvertCtx *apCtx, config *pconf, char *pabsurl,int absurl_len, char **purl, int *len);
+int write_to_memstream_escape_slash(memstream *ms, char *str);
+char * GetLink(pool *apool,char *atrname, char *inbuf, int nsize);
+int if_http_plain_handler(request_rec *r, pool *apool, char *url, memstream *apwrite, config *pconfig);
+int GetToken(char *pcIn, int nSize, char *pcOut, int nOutSize);
+char* find_url_tail(char *url, char *end, char tail);
+int ParseHtml_last(pool *apool,ConvertCtx *apCtx,config *pconf,char *inbuff,int sizee,memstream *apwrite);
+int Redirect(request_rec *r, char *url, config *pconfig, char *msg);
+int lookcopyright(request_rec *r, config *pconfig, char *url);
+int fnMIMEtype(svr_config *conf, char *pType, char *pUrl);
+int IsUTF8(config *pcon, ConvertCtx *pctx, char *pins, int insize);
+char* get_domain__return_path(char *url, char *domain, unsigned int size);
+void my_DetectUTF8BOM(fjtconf *fc, config *pconfig, ConvertCtx *pctx, char *pdata, int length);
+int CheckDomain(svr_config *conf, request_rec *r, apr_pool_t *p, fjtconf *fc, char *url);
 #endif

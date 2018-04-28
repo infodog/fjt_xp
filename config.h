@@ -47,6 +47,7 @@ typedef apr_array_header_t array_header;
 #define UNICODE_BIG5 3
 #define UTF8_GB2312 4
 #define UTF8_BIG5 5
+#define UTF8 6
 #define FFFE 0xFFFE
 #define FEFF 0xFEFF
 /* //----------------------- */
@@ -75,27 +76,9 @@ int BLOCKLEVELSIZELOG(int size, char *file, int line);
 // #define BLOCKLEVELSIZE(n) (((n) + 7) & ~7) */
 #define LOGALLOCSIZE(n) (n)
 
-typedef struct rule
-{
-	int flag;
-	int lenreal;
-	int lenrep;
-	char realcode[RULELEN];
-	char repcode[RULELEN];
-	struct rule *link;
-} rule;
+#include "convert_utils.h"
 
-typedef struct ruletable
-{
-	int flag;
-	rule *body;
-} ruletable;
 
-typedef struct multitable
-{
-	char filename[260];
-	ruletable **uselib;
-} multitable;
 
 /* // WPF */
 typedef struct hosts_addr_domain {
@@ -122,7 +105,6 @@ typedef struct config
 	char *m_pcCookieDomain;
 	int m_iIsRedirectAbsolute;
 	int m_iConvertWord;
-
 	ruletable **m_usetable;
 	ruletable **m_negtable;
 	int m_iIsUnicode;
@@ -223,6 +205,8 @@ typedef struct config
 
 } config;
 
+
+
 typedef struct svr_config
 {
 	/*  // WPF */
@@ -251,6 +235,7 @@ typedef struct svr_config
 	char *m_pcHtmlFileExt[100];
 	int m_iHtmlFileExt;
 	char *m_pcKeepUrlSuffix[100];
+	char *m_pcServerUrlPrefix[512];
 	int m_iKeepUrlSuffix;
 } svr_config;
 
@@ -290,18 +275,14 @@ typedef struct ConvertCtx
 	int nUrlEncode;
 	int nIsUTF8;
 	int iContentIsUnicode;
-
 	int nOutput;
 	char *pcOutput;
-
 	int nNotChangeTextboxUrl;
-
 	request_rec *r;
 	svr_config *svr_conf;
 	config *dir_conf;
-
 	int nIsWord;
-
+    int orig_out_charset;
 	int prefix_len;
 	int nBuffArraySize;
 	char *pBuffArray[5];
@@ -326,12 +307,17 @@ typedef struct fjtconf
 	char *cmd;
 	char *fname;
 	char *pfname;
-	struct memstream *msBuff;
 	struct memstream *msBody;
+	struct memstream *msBuff;
+	struct memstream *ms_out;
+
 	int i_in_size;
 	char *pc_in_buff;
 	int i_out_size;
 	char *pc_out_buff;
+	void *tmpbb;
+	int orig_out_charset;
+	int processed; //是否已经处理过，免得多次处理，浪费CPU
 } fjtconf;
 
 typedef struct hkword
@@ -340,4 +326,5 @@ typedef struct hkword
 	char unicode[10];
 } hkword;
 
+void getdir(char *str,int size);
 #endif

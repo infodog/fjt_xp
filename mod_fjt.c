@@ -45,14 +45,21 @@
 #include "config_utils.h"
 #include "baseutil.h"
 #include "convert.h"
+#include "convert_utils.h"
 #include "mod_fjt.h"
 #include "execinfo.h"
 #include <sys/types.h>
 #include "unistd.h"
+#include "htmlparser.h"
+
+#include "notfoundurls.h"
 
 server_rec *serverRecord;
 config *dir_config_head = NULL;
 extern char *UniGbUniBig,*UniBigUniGb;
+extern ruletable **UniGbUniBigRule, **reverUniGbUniBigRule, **UniBigUniGbRule,**reverUniBigUniGbRule;
+
+static apr_table_t *not_found_urls;
 
 void add_dir_config(config *pconf) {
     if (dir_config_head != NULL) {
@@ -68,37 +75,29 @@ void add_dir_config(config *pconf) {
 
 }
 
-void remove_dir_config(config *pconf) {
-    config *prev = pconf->m_pprev;
-    config *next = pconf->m_pnext;
-    if (prev) {
-        prev->m_pnext = next;
-    } else {
-        dir_config_head = next;
-    }
-    if (next) {
-        next->m_pprev = prev;
-    }
-}
+
 
 void exception_handler(int sig) {
-    void *array[10];
-    size_t size;
-    FILE *ferr;
-    ap_log_data(APLOG_MARK, APLOG_WARNING, serverRecord, NULL, "exception_handler", 17, 0);
+    int j, nptrs;
+    void *buffer[100];
+    char **strings;
 
-    /* // get void*'s for all entries on the stack */
-    size = backtrace(array, 10);
+    nptrs = backtrace(buffer, 100);
 
-    /* // print out all the frames to stderr */
-//    fprintf(ferr, "Error: signal %d:\n", sig);
-    char **ppSymbols = backtrace_symbols(array, size);
-    for (int i = 0; i < 10; i++) {
-        char *psymbol = array[i];
-        ap_log_data(APLOG_MARK, APLOG_WARNING, serverRecord, NULL, psymbol, strlen(psymbol), 0);
+    printf("backtrace() returned %d addresses\n", nptrs);
+
+    strings = backtrace_symbols(buffer, nptrs);
+    if (strings == NULL) {
+        perror("backtrace_symbols");
+        exit(EXIT_FAILURE);
     }
 
-    exit(1);
+    for (j = 0; j < nptrs; j++)
+
+    printf("  [%02d] %s\n", j, strings[j]);
+
+    free(strings);
+    exit(-1);
 }
 
 /* The sample content handler */
@@ -114,66 +113,340 @@ static int fjt_handler(request_rec *r) {
 }
 
 
+
+/* stuff that sucks that I know of:
+ *
+ * bucket handling:
+ *  why create an eos bucket when we see it come down the stream?  just send the one
+ *  passed as input...  news flash: this will be fixed when xlate_out_filter() starts
+ *  using the more generic xlate_brigade()
+ *
+ * translation mechanics:
+ *   we don't handle characters that straddle more than two buckets; an error
+ *   will be generated
+ */
+
+static apr_status_t send_bucket_downstream(ap_filter_t *f, apr_bucket *b)
+{
+//    charset_filter_ctx_t *ctx = f->ctx;
+
+    fjtconf *ctx = f->ctx;
+    apr_status_t rv;
+
+    apr_bucket_brigade *bb = ctx->tmpbb;
+
+    APR_BRIGADE_INSERT_TAIL(bb, b);
+    rv = ap_pass_brigade(f->next, bb);
+    apr_brigade_cleanup(ctx->tmpbb);
+    return rv;
+}
+
+/* send_downstream() is passed the translated data; it puts it in a single-
+ * bucket brigade and passes the brigade to the next filter
+ */
+static apr_status_t send_downstream(ap_filter_t *f, const char *tmp, apr_size_t len)
+{
+    request_rec *r = f->r;
+    conn_rec *c = r->connection;
+    apr_bucket *b;
+
+    b = apr_bucket_transient_create(tmp, len, c->bucket_alloc);
+    return send_bucket_downstream(f, b);
+}
+
+static apr_status_t send_eos(ap_filter_t *f)
+{
+    request_rec *r = f->r;
+    conn_rec *c = r->connection;
+    apr_bucket_brigade *bb;
+    apr_bucket *b;
+    fjtconf *ctx = f->ctx;
+    apr_status_t rv;
+
+    bb = apr_brigade_create(r->pool, c->bucket_alloc);
+    b = apr_bucket_eos_create(c->bucket_alloc);
+    APR_BRIGADE_INSERT_TAIL(bb, b);
+    rv = ap_pass_brigade(f->next, bb);
+    return rv;
+}
+
+
 static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
+    apr_status_t rv;
+    fjtconf *ctx = f->ctx;
+
+    config *dc = ctx->pconfig;
+
+
+    if(f->r->status == 404){
+        char *oldurl = (char*) apr_table_get(f->r->subprocess_env, "OLDURL");
+        if(oldurl!=NULL){
+            char *origurl = (char*) apr_table_get(f->r->subprocess_env, "ORIG_URL");
+            addUrlNotFound(origurl);
+            f->r->status = 302;
+            char *pfilename = f->r->unparsed_uri;
+            if(strnistr(pfilename,"-ifbase",strlen(pfilename))){
+                pfilename = UnChangeChinese(f->r->pool,dc,ctx,pfilename);
+            }
+            apr_table_setn(f->r->headers_out, "Location", pfilename);
+            return APR_SUCCESS;
+        }
+    }
+
+    const char *mime_type = f->r->content_type;
+    int shouldDo = 0;
+    if (mime_type && (strncasecmp(mime_type, "text/", 5) == 0 || strncasecmp(mime_type, "application/json", 16) == 0)){
+        shouldDo = 1;
+    }
+    if(!shouldDo){
+        return ap_pass_brigade(f->next, bb);
+    }
+
+    //转换后长度会变化，所以删除content-length
+    if(!ctx->processed){
+        ctx->processed = 1;
+        apr_table_unset(f->r->headers_out, "Content-Length");
+        char *contentType = apr_table_get(f->r->headers_out, "Content-Type");
+        if(contentType!=NULL){
+            //修改contentType
+            //首先找到charset
+            char *pcharset = strnistr(contentType,"charset=",strlen(contentType));
+            //如果找不到，就不需要处理了
+            if(pcharset){
+                char *newct = apr_palloc(f->r->pool,128);
+                if(strlen(contentType)>100){
+                    //出错了
+                    return ap_pass_brigade(f->next, bb);
+                }
+                memcpy(newct,contentType,pcharset - contentType + 8);
+                newct[pcharset - contentType + 8] = 0;
+
+                char *realcharset = pcharset + 8;
+                int len = strlen(realcharset);
+                if(strnistr(realcharset,"gbk",len)!=NULL || strnistr(realcharset,"gb2312",len)!=NULL){
+                    ctx->pctx.orig_out_charset = ctx->orig_out_charset = GB2312;
+                }
+                else if(strnistr(realcharset,"big5",len)!=NULL){
+                    ctx->pctx.orig_out_charset = ctx->orig_out_charset = BIG5;
+
+                }
+                else if(strnistr(realcharset,"utf",len)!=NULL){
+                    ctx->pctx.orig_out_charset = ctx->orig_out_charset = UTF8;
+                    dc->m_iIsUTF8 = 1;
+
+                }
+                else{
+                    ctx->pctx.orig_out_charset = ctx->orig_out_charset = dc->m_iFromEncode;
+                }
+
+
+                switch(ctx->orig_out_charset){
+                    case GB2312:
+                        if(dc->m_iToEncode == BIG5){
+                            strcat(newct,"big5");
+                        }
+                        break;
+                    case BIG5:
+                        if(dc->m_iToEncode == GB2312){
+                            strcat(newct,"gbk");
+                        }
+                        break;
+                    default:
+                        strcat(newct,"utf-8");
+                }
+                apr_table_setn(f->r->headers_out, "Content-Type",newct);
+                f->r->content_type = newct;
+            }
+        }
+    }
+
+
+    apr_bucket *e, *consumed_bucket;
+    int done;
+    const char *buf = NULL;
+    apr_size_t nbuf;
+    done = 0;
+    e = APR_BRIGADE_FIRST(bb);
+    while (!done) {
+
+        if (e == APR_BRIGADE_SENTINEL(bb)) {
+            break;
+        }
+        if (APR_BUCKET_IS_EOS(e)) {
+            done = 1;
+            break;
+        }
+        if (APR_BUCKET_IS_METADATA(e)) {
+            apr_bucket *metadata_bucket;
+            metadata_bucket = e;
+            e = APR_BUCKET_NEXT(e);
+            APR_BUCKET_REMOVE(metadata_bucket);
+            rv = send_bucket_downstream(f, metadata_bucket);
+            if (rv != APR_SUCCESS) {
+                done = 1;
+            }
+            continue;
+        }
+        rv = apr_bucket_read(e, &buf, &nbuf, APR_BLOCK_READ);
+        if (rv != APR_SUCCESS) {
+            break;
+        }
+        memstream_write(ctx->ms_out,buf,nbuf);
+
+       /* char tt[10] = "hello";
+        memstream_write(ctx->ms_out,tt,strlen(tt));*/
+
+        consumed_bucket = e; /* for axing when we're done reading it */
+        e = APR_BUCKET_NEXT(e); /* get ready for when we access the*/
+        if (consumed_bucket) {
+            apr_bucket_delete(consumed_bucket);
+            consumed_bucket = NULL;
+        }
+    }
+
+    if(done){
+        //从memstream读取数据
+        int nsize = get_memstream_datasize(ctx->ms_out);
+        char *buf = apr_palloc(f->r->pool,nsize+2);
+        memstream_read(ctx->ms_out,buf,nsize);
+
+        //开始转换
+        memstream *conv_stream = create_memstream(f->r->pool);
+
+//
+        if(strnistr(mime_type,"html",strlen(mime_type))){
+            ParseHtml_html(f->r->pool,&ctx->pctx,dc,buf,nsize,conv_stream);
+        }
+        else{
+            translate(1,dc,buf,nsize,conv_stream,f->r->pool);
+        }
+
+        int conv_size = get_memstream_datasize(conv_stream);
+        char *conv_buf = apr_palloc(f->r->pool,conv_size);
+        memstream_read(conv_stream,conv_buf,conv_size);
+        send_downstream(f,conv_buf,conv_size);
+//        printf("exit filter out. send_downstream conv_size=%i\n",conv_size);
+        send_eos(f);
+        return APR_SUCCESS;
+    }
+
     return APR_SUCCESS;
 }
+
+
+static void printFilterChain(request_rec *r){
+    ap_filter_t *curf;
+    curf = r->input_filters;
+    while(curf){
+        curf = curf->next;
+    }
+
+    curf = r->output_filters;
+    while(curf){
+        curf = curf->next;
+    }
+
+}
+
+
 
 
 static apr_status_t fjt_in_filter(ap_filter_t *f, apr_bucket_brigade *bb,
                                   ap_input_mode_t mode, apr_read_type_e block,
                                   apr_off_t readbytes) {
     apr_status_t rv;
-    config *dc = ap_get_module_config(f->r->per_dir_config,
-                                      &fjt_module);
+    fjtconf *ctx = f->ctx;
+
+    config *dc = ctx->pconfig;
     apr_size_t buffer_size;
     int hit_eos;
-
-    ap_log_rerror(APLOG_MARK, APLOG_TRACE5, 0, f->r, APLOGNO(08001)
-            "fjt input filter filename=%s",
-                  f->r->filename);
-
+//    printFilterChain(f);
     /* just get out of the way of things we don't want. */
     if (mode != AP_MODE_READBYTES) {
         return ap_get_brigade(f->next, bb, mode, block, readbytes);
     }
 
+    apr_bucket *b = NULL; /* set to NULL only to quiet some gcc */
+
+    const char *bucket;
+    apr_size_t bytes_in_bucket; /* total bytes read from current bucket */
+
+    int EOS = 0;
+
+    memstream *pstream = create_memstream(f->r->pool);
+    while(!EOS){
+        rv =  ap_get_brigade(f->next, bb, mode, block, readbytes);
+        if(rv != APR_SUCCESS){
+            return rv;
+        }
+        while (1) {
+            b = APR_BRIGADE_FIRST(bb);
+
+
+            if (b == APR_BRIGADE_SENTINEL(bb)) {
+                break;
+            }
+
+            if(APR_BUCKET_IS_EOS(b)){
+                EOS = 1;
+                break;
+            }
+
+
+            rv = apr_bucket_read(b, &bucket, &bytes_in_bucket, APR_BLOCK_READ);
+            if (rv != APR_SUCCESS) {
+                ap_log_rerror(APLOG_MARK, APLOG_ERR, fjt_module.module_index, f->r, APLOGNO(08001)"fjt input filter filename=%s,error while read from bucket.",f->r->filename);
+                return rv;
+            }
+            memstream_write(pstream,bucket,bytes_in_bucket);
+            apr_bucket_delete(b);
+        }
+    }
+
+    int num = get_memstream_datasize(pstream);
+
+    char *buf = apr_palloc(f->r->pool,num+2);
+    memstream_read(pstream,buf,num);
+    buf[num] = buf[num+1] = 0;
+
+    apr_bucket *e;
+
+    char *tembuf = apr_palloc(f->r->pool,2*num+100);
+    int outlen;
+    UrlDecodeHZ(buf, num, tembuf, &outlen);
+    tembuf[outlen] = 0;
+    tembuf[outlen] = 0;
+
+    memstream *conv_stream = create_memstream(f->r->pool);
+    /********真正做转换的代码***********/
+    translate(0,dc,tembuf,outlen,conv_stream,f->r->pool);
+    /********************************/
+
+
+    int streamSize = get_memstream_datasize(conv_stream);
+    char *conv_buf = apr_palloc(f->r->pool,streamSize);
+    memstream_read(conv_stream,conv_buf,streamSize);
+
+
+    char *outbuf = apr_palloc(f->r->pool, streamSize * 3+100);
+    num = UrlEncodeHZ(conv_buf, streamSize, outbuf);
+    outbuf[num] = 0;
+    e = apr_bucket_heap_create(outbuf,
+                               num,
+                               NULL, f->r->connection->bucket_alloc);
+
+    /* make sure we insert at the head, because there may be
+             * an eos bucket already there, and the eos bucket should
+             * come after the data
+             */
+    APR_BRIGADE_INSERT_HEAD(bb, e);
+
     //打印出来：
     return ap_get_brigade(f->next, bb, mode, block, readbytes);
-}
 
-
-void hexDump (char *src, void *addr, int len) {
-    int i;
-    unsigned char buff[17];
-    unsigned char *pc = (unsigned char*)src;
-    char *pdest = addr;
-    *pdest = 0;
-
-    // Process every byte in the data.
-    for (i = 0; i < len; i++) {
-        // Now the hex code for the specific character.
-        sprintf (buff," %02x", pc[i]);
-        strcat(pdest,buff);
-    }
 
 }
 
-void show(request_rec *r,char *in,int len){
-    unsigned char *p = in;
-
-    while(p<in+len){
-
-        int offset = (*(p+1) * 256 + *(p))*2;
-        unsigned char low = UniGbUniBig[offset];
-        unsigned char high = UniGbUniBig[offset+1];
-
-        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)
-                "offset=%i,low=%i, high=%i,UniGbUniBig=", offset,low,high);
-
-        p+=2;
-    }
-
-}
 
 /* find_code_page() is a fixup hook that checks if the module is
  * configured and the input or output potentially need to be translated.
@@ -191,9 +464,8 @@ static int find_code_page(request_rec *r) {
             "fjt find_code_page filename=%s,r->uri=%s,r->unparsed_uri=%s",
                   r->filename, r->uri, r->unparsed_uri);
 
-    serverRecord = r->server;
 
-//    signal(SIGSEGV, exception_handler); /* // install our handler */
+    serverRecord = r->server;
 
     /* catch proxy requests */
     if (!r->proxyreq) {
@@ -201,36 +473,92 @@ static int find_code_page(request_rec *r) {
         return DECLINED;
     }
 
+
+
     /* mod_rewrite indicators */
     if (!r->filename
         || strncmp(r->filename, "proxy:", 6)) {
         return DECLINED;
     }
 
+    fjtconf *session = (fjtconf *) apr_palloc(r->pool, sizeof(fjtconf));
+    memset(session,0,sizeof(fjtconf));
+    session->p = r->pool;
+    session->pconfig = dc;
+    session->p = r->pool;
+    session->oldurl = r->filename;
+
+    session->pctx.r = r;
+    session->pctx.dir_conf = dc;
+    session->pctx.svr_conf = svr_conf;
+    session->ms_out = create_memstream(r->pool);
+    session->tmpbb =  apr_brigade_create(r->pool,r->connection->bucket_alloc);
+//        session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool,r->uri);
+    init_session(session,r,r->pool);
+
+    //某些图片服务器，通过Referer来防止盗图
+    apr_table_unset(r->headers_in,"Referer");
+
+    ap_set_module_config(r->request_config, &fjt_module, session);
+
+    apr_table_set(r->subprocess_env, "ORIG_URL",r->filename);
+
+    char *oldurl = (char*) apr_table_get(r->subprocess_env, "OLDURL");
+    if(oldurl){
+        int isNotFound = isUrlNotFound(r->filename);
+        if(isNotFound){
+            char *newfilename = apr_pstrcat(r->pool,"proxy:",oldurl,NULL);
+            r->filename = newfilename;
+        }
+    }
+
+    if(strnistr(r->filename,"-ifbase",strlen(r->filename))){
+        char *pfilename = UnChangeChinese(r->pool,dc,session,r->filename);
+        r->filename = pfilename;
+
+        {// WPF set base url
+            char *pburl = (char*) apr_table_get(r->subprocess_env, "BASEURL");
+            if (dc->m_pcConfBaseUrl[0] != '\0') {
+                session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool, dc->m_pcConfBaseUrl);
+            }
+            else if (pburl != NULL) {
+                session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool, pburl);
+            }
+            else{
+                char *p = r->filename+6;
+                session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool,p);
+            }
+        }
+
+        return OK;
+    }
 
 
-    if (dc->m_iFromEncode != dc->m_iToEncode) {
-        fjtconf *session = (fjtconf *) apr_palloc(r->pool, sizeof(fjtconf));
-        session->p = r->pool;
-        session->oldurl = r->filename;
-        session->pctx.r = r;
-        session->pctx.dir_conf = dc;
-        session->pctx.svr_conf = svr_conf;
+
+    if (dc && dc->m_iFromEncode != dc->m_iToEncode) {
 
 
-        char *uri = r->filename;
         char *pquery = strchr(r->filename, '?');
         if (pquery == NULL) {
+            {// WPF set base url
+                char *pburl = (char*) apr_table_get(r->subprocess_env, "BASEURL");
+                if (dc->m_pcConfBaseUrl[0] != '\0') {
+                    session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool, dc->m_pcConfBaseUrl);
+                }
+                else if (pburl != NULL) {
+                    session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool, pburl);
+                }
+                else{
+                    char *p = r->filename+6;
+                    session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool,p);
+                }
+            }
             return DECLINED;
         }
         char *path = apr_pstrdup(r->pool,r->filename);
         pquery = strchr(path, '?');
         *pquery = 0;
         pquery++;
-
-
-        ap_set_module_config(r->request_config, &fjt_module, session);
-
         char tembuf[6000];
 
         //假设url都是utf-8
@@ -240,46 +568,54 @@ static int find_code_page(request_rec *r) {
 
         nsize = strlen(pquery);
         if (nsize > sizeof(tembuf) - 1024) {
+            {// WPF set base url
+                char *pburl = (char*) apr_table_get(r->subprocess_env, "BASEURL");
+                if (dc->m_pcConfBaseUrl[0] != '\0') {
+                    session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool, dc->m_pcConfBaseUrl);
+                }
+                else if (pburl != NULL) {
+                    session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool, pburl);
+                }
+                else{
+                    char *p = r->filename+6;
+                    session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool,p);
+                }
+            }
             return DECLINED;
         }
-
-
         UrlDecodeHZ(pquery, nsize, tembuf, &outlen);
-
         tembuf[outlen] = 0;
-        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)
-                "UrlEncodeHZ, outlen=%i,utf8no=%i",outlen,session->pctx.utf8no);
-
-        session->pctx.utf8no = 0;
+               session->pctx.utf8no = 0;
         char *puni = apr_palloc(r->pool, outlen * 2+1024);
 
-         int num = utf82unicode(tembuf, outlen, puni, &session->pctx, FEFF);
+        int num = utf82unicode(tembuf, outlen, puni, &session->pctx, FEFF);
 
-        char *pdump = apr_palloc(r->pool, outlen * 6+1024);
-
-       /* hexDump(puni,pdump,num);
-        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)
-                "after utf82unicode, num=%i,puni=%s",num,pdump);
-*/
         int from, to;
         from = dc->m_iToEncode + 2;
         to = dc->m_iFromEncode + 2;
-        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)
-                "from=%i,to=%i",from,to);
-
-        char *pconvertedUni = apr_palloc(r->pool, num * 2);
         dc->m_iConvertWord = 0;
-        show(r,puni,num);
-        num = ConvertUnicodeExt(from, to, dc->m_iConvertWord, puni, num, pconvertedUni);
+
+        ruletable **ruletables;
+        char *wordTable;
+        if(from == UNICODE_BIG5){
+            ruletables = UniBigUniGbRule;
+            wordTable = UniBigUniGb;
+        }
+        else{
+            ruletables = UniGbUniBigRule;
+            wordTable = UniGbUniBig;
+        }
+        memstream *pstream = create_memstream(r->pool);
+
+        convert_lite_memstream(ruletables,wordTable,puni,num,pstream,1);
+        num = get_memstream_datasize(pstream);
+
+        char *pconvertedUni = apr_palloc(r->pool,num+2);
+        num = memstream_read(pstream,pconvertedUni,num);
+        pconvertedUni[num] = 0;
+        pconvertedUni[num+1] = 0;
 
 
-        *pdump = apr_palloc(r->pool, num * 6 + 1024);
-
-       /*
-        hexDump(pconvertedUni,pdump,num);
-        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)
-                "after utf82unicode, num=%i,pconvertedUni=%s",num,pdump);
-*/
         char *putf8 = apr_palloc(r->pool, num * 3);
         num = unicode2utf8(pconvertedUni, num, 0, putf8);
 
@@ -289,11 +625,6 @@ static int find_code_page(request_rec *r) {
 
         outbuf[num] = 0;
 
-        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)
-                "fjt find_code_page after UrlEncodeHZ, outbuf=%s,num=%i",
-                      outbuf, num);
-
-
         char *newFileName = apr_palloc(r->pool, strlen(path) + strlen(outbuf) + 4);
 
         strcpy(newFileName, path);
@@ -302,13 +633,45 @@ static int find_code_page(request_rec *r) {
 
         r->filename = newFileName;
 
-        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r, APLOGNO(08001)
-                "filename after convert=%s",
-                      r->filename);/**/
+        {// WPF set base url
+            char *pburl = (char*) apr_table_get(r->subprocess_env, "BASEURL");
+            if (dc->m_pcConfBaseUrl[0] != '\0') {
+                session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool, dc->m_pcConfBaseUrl);
+            }
+            else if (pburl != NULL) {
+                session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool, pburl);
+            }
+            else{
+                char *p = r->filename+6;
+                session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool,p);
+            }
+        }
+
 
         return OK;
     }
     return DECLINED;
+}
+
+
+/* fjt_insert_filter() is a filter hook which decides whether or not
+ * to insert a translation filter for the current request.
+ */
+static void fjt_insert_filter(request_rec *r)
+{
+    /* Hey... don't be so quick to use reqinfo->dc here; reqinfo may be NULL */
+    fjtconf *session = ap_get_module_config(r->request_config, &fjt_module);
+
+    if (session!=NULL) {
+        ap_add_input_filter("fjt_in_filter", session, r,r->connection);
+        ap_add_output_filter("INFLATE", NULL, r, r->connection);
+        ap_add_output_filter("fjt_out_filter", session, r, r->connection);
+        printFilterChain(r);
+        return;
+    }
+
+    printFilterChain(r);
+
 }
 
 static const command_rec fjt_cmds[] = {
@@ -471,7 +834,6 @@ static const command_rec fjt_cmds[] = {
         AP_INIT_FLAG("AddUrlPrefixToParameter", add_url_prefix_to_parameter, NULL, ACCESS_CONF,
                      "add_url_prefix_to_parameter"),
         {NULL}
-
 };
 
 int init_dir_convert_table(config *pconfig, pool *p) {
@@ -481,7 +843,6 @@ int init_dir_convert_table(config *pconfig, pool *p) {
 
     if (apr_table_get(pconfig->m_pUseTableFile, "default"))
         return 1;
-
     reqhdrs_arr = (array_header *) apr_table_elts(pconfig->m_pUseTableFile);
     reqhdrs = (table_entry *) reqhdrs_arr->elts;
 
@@ -491,9 +852,20 @@ int init_dir_convert_table(config *pconfig, pool *p) {
     memset(pconfig->m_negtable, 0, sizeof(ruletable *) * FJTMAXWORD);
 
     for (i = 0; i < reqhdrs_arr->nelts; i++) {
-        if (!initfile(pconfig->m_usetable, pconfig->m_negtable, (char *) reqhdrs[i].key, p))
+        int isUtf16 = 0;
+        if(pconfig->m_iUseUnicodeTable){
+            isUtf16 = 1;
+        }
+        char *tablename = (char *) reqhdrs[i].key;
+        char filename[1024];
+        getdir(filename,sizeof(filename));
+        strcat(filename,"etc/");
+        strcat(filename,tablename);
+        if (!initFile(pconfig->m_usetable, pconfig->m_negtable,filename,isUtf16))
             return 0;
     }
+    adjust_ruletable(pconfig->m_usetable);
+    adjust_ruletable(pconfig->m_negtable);
 
 
     return 1;
@@ -503,7 +875,7 @@ static int init_convert_tables(apr_pool_t *pool) {
     config *pcur = dir_config_head;
     pid_t curPid = getpid();
     while (pcur) {
-        ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL, "[Info] child_init,pid=%i,walking %s", curPid,
+        ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL, "[Info] init_convert_tables,pid=%i,walking %s", curPid,
                      pcur->location);
         init_dir_convert_table(pcur, pool);
         pcur = pcur->m_pnext;
@@ -511,9 +883,6 @@ static int init_convert_tables(apr_pool_t *pool) {
     InitUrlEncodeTable();
     InitSafeTable();
 
-
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-                 "going to init_convert.....");
     //init默认的convert table
     if (!init_convert(pool)) {
         ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
@@ -525,48 +894,73 @@ static int init_convert_tables(apr_pool_t *pool) {
 
 static int fjt_post_config(apr_pool_t *pconf, apr_pool_t *plog,
                            apr_pool_t *ptemp, server_rec *s) {
-    config *pcur = dir_config_head;
     pid_t curPid = getpid();
-    while (pcur) {
-        ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL, "[Info] post_config,pid=%i,walking %s", curPid,
-                     pcur->location);
-        pcur = pcur->m_pnext;
-    }
+    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL, "[Info] post_config,pid=%i", curPid);
+    init_convert_tables(pconf);
     return OK;
 }
 
-void fjt_child_init(apr_pool_t *pool, server_rec *s){
-    init_convert_tables(pool);
-}
-
 static void fjt_register_hooks(apr_pool_t *p) {
+    signal(SIGSEGV, exception_handler); /* // install our handler */
+
+    init_not_found_urls_cache(p);
+
     ap_hook_fixups(find_code_page, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_handler(fjt_handler, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_post_config(fjt_post_config, NULL, NULL, APR_HOOK_MIDDLE);
-    ap_hook_child_init(fjt_child_init, NULL, NULL, APR_HOOK_MIDDLE);
+
+    ap_hook_insert_filter(fjt_insert_filter, NULL, NULL, APR_HOOK_REALLY_LAST);
+
+    ap_register_output_filter("fjt_out_filter", fjt_out_filter, NULL,
+                              AP_FTYPE_RESOURCE);
+    ap_register_input_filter("fjt_in_filter", fjt_in_filter, NULL,
+                             AP_FTYPE_RESOURCE);
 }
 
 static void *my_create_dir_conf(apr_pool_t *p, char *x) {
-
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-                 "[Info] my_create_dir_conf");
     config *conf = apr_pcalloc(p, sizeof(config));
     add_dir_config(conf);
     conf->location = apr_pstrdup(p, x);
     conf->m_pcBaseUrl = apr_pcalloc(p, 128);
+    memset(conf->m_pcBaseUrl,0,128);
+
     conf->m_pcCookieDomain = apr_pcalloc(p, 128);
+    memset(conf->m_pcCookieDomain,0,128);
+
     conf->m_pcExtraData = apr_pcalloc(p, 128);
+    memset(conf->m_pcExtraData,0,128);
+
     conf->m_pcFramePrefix = apr_pcalloc(p, 128);
+    memset(conf->m_pcFramePrefix,0,128);
+
     conf->m_pcHTTPPrefix = apr_pcalloc(p, 128);
+    memset(conf->m_pcHTTPPrefix,0,128);
+
     conf->m_pcJsPrefix = apr_pcalloc(p, 128);
+    memset(conf->m_pcJsPrefix,0,128);
+
     conf->m_pcPath = apr_pcalloc(p, 128);
+    memset(conf->m_pcPath,0,128);
+
     conf->m_pcSUrlPrefix = apr_pcalloc(p, 128);
+    memset(conf->m_pcSUrlPrefix,0,128);
+
     conf->m_usetable = NULL;
     conf->m_pcHkPrefix = apr_pcalloc(p, 128);
+    memset(conf->m_pcHkPrefix,0,128);
+
     conf->m_pcInsertCSS = apr_pcalloc(p, 128);
+    memset(conf->m_pcInsertCSS,0,128);
+
     conf->m_pcConfBaseUrl = apr_pcalloc(p, 1024);
+    memset(conf->m_pcConfBaseUrl,0,1024);
+
     conf->m_pcRedirectTipString = apr_pcalloc(p, 4096);
+    memset(conf->m_pcRedirectTipString,0,4096);
+
     conf->m_pcRedirectTipURL = apr_pcalloc(p, 1024);
+    memset(conf->m_pcRedirectTipURL,0,1024);
+
     conf->m_iForceRedirectTip = -1;
     conf->m_iForceConvertPage = -1;
     conf->m_iSendURLsAsUTF8 = -1;
@@ -576,9 +970,17 @@ static void *my_create_dir_conf(apr_pool_t *p, char *x) {
     conf->m_iMergeCookie = -1;
     conf->m_iAddUrlPrefixToParameter = -1;
     conf->m_pcUrlPrefix = apr_pcalloc(p, 128);
+    memset(conf->m_pcUrlPrefix,0,128);
+
     conf->m_pcExtraCookie = apr_pcalloc(p, 128);
+    memset(conf->m_pcExtraCookie,0,128);
+
     conf->m_pcUnconvertSymbol = apr_pcalloc(p, 128);
+    memset(conf->m_pcUnconvertSymbol,0,128);
+
     conf->m_pcSetContentType = apr_pcalloc(p, 128);
+    memset(conf->m_pcSetContentType,0,128);
+
     conf->m_iShouldExpandJs = -1;
     conf->m_iRedirectTipTime = -1;
     conf->m_iIsRedirectAbsolute = -1;
@@ -655,16 +1057,17 @@ static void *my_create_dir_conf(apr_pool_t *p, char *x) {
 
 
 static void *my_merge_dir_conf(apr_pool_t *pool, void *BASE, void *ADD) {
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-                 "[Info] my_merge_dir_conf ,InitPerDirConvertTable......");
+
     config *base = BASE;
     config *add = ADD;
     config *conf = apr_palloc(pool, sizeof(config));
-
+    memset(conf,0,sizeof(config));
+//    printf("my_merge_dir_conf,base->location=%s, add->location=%s\n",base->location,add->location);
     { /* // WPF  */
-
+        conf->location = add->location;
         conf->m_pcCookieDomain = (add->m_pcCookieDomain[0] == 0) ? base->m_pcCookieDomain : add->m_pcCookieDomain;
         conf->m_pcUrlPrefix = (add->m_pcUrlPrefix[0] == 0) ? base->m_pcUrlPrefix : add->m_pcUrlPrefix;
+        conf->m_pcSUrlPrefix = (add->m_pcSUrlPrefix[0] == 0) ? base->m_pcSUrlPrefix : add->m_pcSUrlPrefix;
         conf->m_pcHkPrefix = (add->m_pcHkPrefix[0] == 0) ? base->m_pcHkPrefix : add->m_pcHkPrefix;
         conf->m_pcInsertCSS = (add->m_pcInsertCSS[0] == 0) ? base->m_pcInsertCSS : add->m_pcInsertCSS;
         conf->m_pcConfBaseUrl = (add->m_pcConfBaseUrl[0] == 0) ? base->m_pcConfBaseUrl : add->m_pcConfBaseUrl;
@@ -773,11 +1176,15 @@ static void *my_merge_dir_conf(apr_pool_t *pool, void *BASE, void *ADD) {
                                                                                    : add->m_iValueChangeChineseLevel;
         conf->m_iInConvertUnicode = (add->m_iInConvertUnicode == -1) ? base->m_iInConvertUnicode
                                                                      : add->m_iInConvertUnicode;
+
+
+        conf->m_usetable = add->m_usetable?add->m_usetable:base->m_usetable;
+        conf->m_negtable = add->m_negtable?add->m_negtable:base->m_negtable;
     }
 
     //现在已经获得了configure, 开始初始化
-    remove_dir_config(ADD);
-    add_dir_config(conf);
+//    remove_dir_config(ADD);
+//    add_dir_config(conf);
     return conf;
 }
 

@@ -8,10 +8,22 @@
 void getdir(char *dir,int len);
 #endif
 
+typedef struct unicode_stream{
+    int len;
+    char buf[2048];
+    FILE *fp;
+    int isEnd;
+} unicode_stream;
+
+int init_stream(FILE *fp,unicode_stream *stream);
+int readLineW(char *buf,int nbuf,unicode_stream *stream);
+
 int  init_convert(pool *p);
-int  initfile(ruletable *wordlist[], ruletable *reverselist[], char *filename, pool *p);
+int initfile(ruletable *wordlist[], ruletable *reverselist[], char *filename, pool *p,int isUtf16);
+int InitOnlyUnicode(pool *p);
 int  convert(ruletable** pctx,char *inbuf,int insize,memstream *pstream,config *pcon, ConvertCtx *locaptr);
 int unconvert_orig(ruletable** pctx,char *inbuf,int insize,memstream *pstream,config *pcon, ConvertCtx *locaptr);
+
 int  unconvert(ruletable** pctx,char *inbuf,int insize,memstream *pstream,config *pcon, ConvertCtx *locaptr);
 void changeunicode(char *inbuff,int *insize,ConvertCtx *apCtx,int isunicode,int basecode);
 int  utf82unicode(char *pinput, int insize, char *pout, ConvertCtx *apCtx, int twobytes);
@@ -29,7 +41,11 @@ int  my_unescape(char *inbuf, int *size, ConvertCtx *apCtx, int encode);
 int  my_escape(int fromcode, char *pin, int nsize, char *pout);
 void CheckLeftBuffer(ConvertCtx *pctx, config *pconf, char **inbuffer, int *insize);
 char* ismine(request_rec *r, char *url, pool *p, int *flag);
-int ConvertUnicodeExt(int from, int to, int conword, char *pins, int insize, char *pout);
+int ConvertUnicodeExt(int from, int to, int conword, char *pins, int insize, char *pout, int outsize);
 int url_unicode2utf8(char *url, char *newurl);
 
+int convert_lite_memstream(ruletable** ruletables, char *wordTable, char *inbuf, int insize,memstream *pstream,int isUtf16);
+int convert_lite_buf(ruletable** ruletables, char *wordTable, char *inbuf, int insize,unsigned char *pbuf,int nbuf,int isUtf16);
+
+int translate(int inOut,config *dc,char *inbuf, int insize,memstream *outStream,pool *pool);
 #endif 

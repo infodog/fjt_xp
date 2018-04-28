@@ -16,8 +16,7 @@ const char *add_cookie_domain(cmd_parms *cmd, void *dummy, const char *ss){
 }
 
 const char *add_url_prefix(cmd_parms *cmd, void *dummy, const char *ss){
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "add_url_prefix ss=%s",ss);
+
     config *conf = (config*)dummy;
 
     if(conf==NULL){

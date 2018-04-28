@@ -257,34 +257,27 @@ int InitShareFile(ruletable *wordlist, char *pBoth, char *filename)
     return(1);
 }
 
+int InitWordTable(char *ptable,char *filename){
+    FILE *fp;
+    unsigned char buff[4];
+    int low = 2, high = 256 * 2;
+    if ((fp = fopen(filename, "rb")) == NULL) return 0;
+    while (!feof(fp)) {
+        if (fread(buff, 1, 4, fp) != 4) break;
+        int offset = high * buff[0] + low * buff[1];
+        ptable[offset] = buff[2];
+        ptable[offset+1] = buff[3];
+    }
+
+    fclose(fp);
+    return 1;
+}
 /*-------------------------------------------------------------------------------------*/
 /* Share word and words rule table (use for UNICODE TO UNICODE) */
 
 int InitUnicodeWord(char *pbuff, char *filename)
 {
-    FILE *fp;
-    unsigned char buff[4];
-    int low = 2, high = 256 * 2;
-    
-    if ((fp = fopen(filename, "rb")) == NULL) return 0;
-#ifndef ENCRYPT_WORDS
-    /* fseek(fp, 0x2L, SEEK_SET); */
-    /* WPF 2002-8-9 Is not unicode format remove this line */
-//    fread(buff, 1, 2, fp);
-#endif
-    printf("filename=%s\n",filename);
-    while (!feof(fp)) {
-        if (fread(buff, 1, 4, fp) != 4) break;
-        int offset = high * buff[0] + low * buff[1];
-        printf("offset=%i,%i,%i,%i,%i\n" , offset,buff[0],buff[1],buff[2],buff[3]);
-        pbuff[offset] = buff[2];
-        pbuff[offset+1] = buff[3];
-//        *(pbuff + high * buff[0] + low * buff[1]) = buff[2];
-//        *(pbuff + high * buff[0] + low * buff[1] + 1) = buff[3];
-    }
-    
-    fclose(fp);
-    return 1;
+   return InitWordTable(pbuff,filename);
 }
 
 int getline2(char *line, int len, FILE *fp)
