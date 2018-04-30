@@ -1610,7 +1610,6 @@ int check_domain_of_license(char *domain, apr_table_t *allowed_domains){
         char *allowedDomain, *toUrl;
         allowedDomain = reqhdrs[i].key;
         int lenAllowedDomain = strlen(allowedDomain);
-
         if (lenDomain >= lenAllowedDomain && strnicmp(domain+(lenDomain-lenAllowedDomain), allowedDomain, lenAllowedDomain)==0)
         {
            return 1;
