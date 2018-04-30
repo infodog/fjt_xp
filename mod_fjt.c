@@ -482,6 +482,7 @@ static int find_code_page(request_rec *r) {
     char *pabsurl = r->filename + 6;
     char *domain = getDomain(pabsurl, r->pool);
     if(!check_domain_of_license(domain,svr_conf->allowed_domain)){
+        printf("domain not licensed:%s\n",domain);
         r->status = 506;
         r->handler = "fjt";
         r->filename = "/fjt_not_license.html";
