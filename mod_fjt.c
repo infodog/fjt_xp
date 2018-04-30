@@ -53,6 +53,7 @@
 #include "htmlparser.h"
 
 #include "notfoundurls.h"
+#include "license.h"
 
 server_rec *serverRecord;
 config *dir_config_head = NULL;
@@ -108,7 +109,7 @@ static int fjt_handler(request_rec *r) {
     r->content_type = "text/html";
 
     if (!r->header_only)
-        ap_rputs("FJT is licensed  to FJT corporation.\n", r);
+        ap_rputs("domain is not licensed. FJT is licensed  to FJT corporation.\n", r);
     return OK;
 }
 
@@ -473,13 +474,21 @@ static int find_code_page(request_rec *r) {
         return DECLINED;
     }
 
-
-
     /* mod_rewrite indicators */
     if (!r->filename
         || strncmp(r->filename, "proxy:", 6)) {
         return DECLINED;
     }
+
+    char *pabsurl = r->filename + 6;
+    char *domain = getDomain(pabsurl, r->pool);
+    if(!check_domain_of_license(domain,svr_conf->allowed_domain)){
+        r->status = 506;
+        r->handler = "fjt";
+        r->filename = "/fjt_not_license.html";
+        return OK;
+    }
+
 
     fjtconf *session = (fjtconf *) apr_palloc(r->pool, sizeof(fjtconf));
     memset(session,0,sizeof(fjtconf));
@@ -529,15 +538,10 @@ static int find_code_page(request_rec *r) {
                 session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool,p);
             }
         }
-
         return OK;
     }
 
-
-
     if (dc && dc->m_iFromEncode != dc->m_iToEncode) {
-
-
         char *pquery = strchr(r->filename, '?');
         if (pquery == NULL) {
             {// WPF set base url
@@ -1225,6 +1229,7 @@ static void *my_merge_svr_config(apr_pool_t *p, void *basev, void *overridesv) {
     newconf->nFriendlyDomain = (overrides->nFriendlyDomain == 0) ? base->nFriendlyDomain : overrides->nFriendlyDomain;
     newconf->timeCheckPoint = (overrides->timeCheckPoint == 0) ? base->timeCheckPoint : overrides->timeCheckPoint;
     newconf->allowed_domain = (overrides->nYesDomain == 0) ? base->allowed_domain : overrides->allowed_domain;
+    printf("merge_svr_config = %i\n",newconf->allowed_domain);
     newconf->exclude_domain = (overrides->nExcludeDomain == 0) ? base->exclude_domain : overrides->exclude_domain;
     newconf->friendly_domain = (overrides->nFriendlyDomain == 0) ? base->friendly_domain : overrides->friendly_domain;
 

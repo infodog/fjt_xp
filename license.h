@@ -7,4 +7,5 @@
 int CheckLicense(svr_config *conf, pool *p, char *domain);
 int CheckUrlPrefix(pool *p, char *Prefix);
 
+
 #endif

@@ -1588,7 +1588,7 @@ char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, 
 	
 	pe = pb + 1; 
 	while (pb < pend) {
-		while (*pe != '/' && *pe != '; ' && *pe != '?' && pe < pend) {
+		while (*pe != '/' && *pe != ';' && *pe != '?' && pe < pend) {
 			++pe; 
 		}
 		
@@ -2048,9 +2048,28 @@ void itoa(int num,char *str,int base)
     for(j=0;i>0;j++,i--)
         *(str+j)=use[i-1];
 }
-
-
 #endif
+
+char *getDomain(char *pabsurl, apr_pool_t *pool){
+    char *presult = apr_palloc(pool,256);
+    char *pdomain = strnistr(pabsurl,"://",strlen(pabsurl));
+    pdomain = pdomain + 3;
+    char *pend = strchr(pdomain,'/');
+    if(pend){
+        if(pend - pdomain >255){
+            return NULL;
+        }
+        memcpy(presult,pdomain,pend-pdomain);
+        presult[pend-pdomain] = 0;
+        return presult;
+    }
+    else{
+        if(strlen(pdomain)>255){
+            return NULL;
+        }
+        strcpy(presult,pdomain);
+    }
+}
 
 // WPF //
 

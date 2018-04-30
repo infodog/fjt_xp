@@ -1052,13 +1052,14 @@ const char *set_convert_domain(cmd_parms *cmd, void *dummy, const char *f, const
                 "conf->allowed_domain is NULL");
         }
         else{
+            printf("set allowed domain allowed_domain=%i,%s=%s\n",conf->allowed_domain,f,r);
             apr_table_set(conf->allowed_domain , f, r);
         }
     }
     else {
         ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
                      "[notice] The domain (%s) is not licensed.", f);
-        // exit(-1);
+         exit(-1);
     }
     ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
         "set convert domains ok, %s:%s",f,r);
@@ -1657,5 +1658,34 @@ const char *add_url_prefix_to_parameter(cmd_parms *cmd, void *dummy, int flag)
     ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
         "AddUrlPrefixToParameter ok");
     return NULL;
+}
+
+int check_domain_of_license(char *domain, apr_table_t *allowed_domains){
+    array_header *reqhdrs_arr;
+    table_entry *reqhdrs;
+    int i;
+
+    printf("check_domain_of_license %i\n",allowed_domains);
+
+    reqhdrs_arr = (array_header *) apr_table_elts(allowed_domains);
+    if (!reqhdrs_arr) {
+        return 0;
+    }
+    reqhdrs = (table_entry *) reqhdrs_arr->elts;
+    int lenDomain = strlen(domain);
+
+    for (i=0; i < reqhdrs_arr->nelts ; i++)
+    {
+        char *allowedDomain, *toUrl;
+        allowedDomain = reqhdrs[i].key;
+        int lenAllowedDomain = strlen(allowedDomain);
+
+        if (lenDomain >= allowedDomain && strnicmp(domain+(lenDomain-lenAllowedDomain), allowedDomain, lenAllowedDomain)!=NULL)
+        {
+           return 1;
+        }
+    }
+    return 0;
+
 }
 

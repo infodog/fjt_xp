@@ -168,7 +168,7 @@ int ICL_GetPlainFromPKCS7mem(char *asPKCS7,
     
     /* get the certificate */
     // x509 = (X509 *)PEM_ASN1_read_bio((char *(*)())d2i_X509,
-    x509 = (X509 *) PEM_ASN1_read_bio((void* (__cdecl *)(void **, const unsigned char **, long)) d2i_X509,
+    x509 = (X509 *) PEM_ASN1_read_bio(d2i_X509,
         PEM_STRING_X509,
         pbio, NULL, ICL_MBpasswd_callback, NULL);
     
@@ -519,6 +519,8 @@ int check_domain(domain_link *dk, char *dm)
     return 0;
 }
 
+
+
 int ReadLicense()
 {
     char dirdir[1024];	/* for install */ 
@@ -764,7 +766,7 @@ int CheckLicense(svr_config *conf, pool *p, char *domain)
 	if (strnistr(g_cxLicense, "<domain>", strlen(g_cxLicense)) != NULL
 		&& strnistr(g_cxLicense, "<license>", strlen(g_cxLicense)) == NULL) 
 	{
-		ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL, "FJT4.5.X Version must <license> ");
+		ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL, "FJT4.5.X and above Version must contains <license> ");
 		exit(-1);
 	}
     
