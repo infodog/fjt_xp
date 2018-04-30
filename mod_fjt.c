@@ -319,7 +319,8 @@ static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
             ParseHtml_html(f->r->pool,&ctx->pctx,dc,buf,nsize,conv_stream);
         }
         else{
-            translate(1,dc,buf,nsize,conv_stream,f->r->pool);
+//            translate(1,dc,buf,nsize,conv_stream,f->r->pool);
+            ReplaceHTTPAndConvert(&ctx->pctx,conv_stream,dc,buf,nsize);
         }
 
         int conv_size = get_memstream_datasize(conv_stream);
