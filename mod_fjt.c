@@ -55,7 +55,7 @@
 #include "notfoundurls.h"
 #include "license.h"
 
-server_rec *serverRecord;
+
 config *dir_config_head = NULL;
 extern char *UniGbUniBig,*UniBigUniGb;
 extern ruletable **UniGbUniBigRule, **reverUniGbUniBigRule, **UniBigUniGbRule,**reverUniBigUniGbRule;
@@ -465,8 +465,6 @@ static int find_code_page(request_rec *r) {
             "fjt find_code_page filename=%s,r->uri=%s,r->unparsed_uri=%s",
                   r->filename, r->uri, r->unparsed_uri);
 
-
-    serverRecord = r->server;
 
     /* catch proxy requests */
     if (!r->proxyreq) {
