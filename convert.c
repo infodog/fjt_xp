@@ -358,7 +358,7 @@ int InitConverttable()
 {
 	char buf[256];
 	buf[0] = '\0';
-	printf("init convert table .......\n");
+//	printf("init convert table .......\n");
 	memset(gb2big5,0,sizeof(gb2big5));
 	memset(big52gb,0,sizeof(gb2big5));
 #ifdef WIN32	

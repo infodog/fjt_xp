@@ -22,7 +22,7 @@ const char *add_url_prefix(cmd_parms *cmd, void *dummy, const char *ss){
     if(conf==NULL){
         ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
             "add_url_prefix conf==NULL,return");
-            return NULL;
+        return NULL;
     }
 
     strcpy(conf->m_pcUrlPrefix, ss);
@@ -131,8 +131,6 @@ const char *redirect_tip_url(cmd_parms *cmd, void *dummy, const char *ss){
 
 const char *add_surl_prefix(cmd_parms *cmd, void *dummy, const char *ss){
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "add_surl_prefix ......");
     config *conf = (config*)dummy;
     if(!conf){
         return NULL;
@@ -188,9 +186,6 @@ const char *add_surl_prefix(cmd_parms *cmd, void *dummy, const char *ss){
             }
         }
     }/* // WPF End it. */
-
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "add_surl_prefix ok!");
     return NULL;
 }
 
@@ -1052,7 +1047,7 @@ const char *set_convert_domain(cmd_parms *cmd, void *dummy, const char *f, const
                 "conf->allowed_domain is NULL");
         }
         else{
-            printf("set allowed domain allowed_domain=%i,%s=%s\n",conf->allowed_domain,f,r);
+//            printf("set allowed domain allowed_domain=%i,%s=%s\n",conf->allowed_domain,f,r);
             apr_table_set(conf->allowed_domain , f, r);
         }
     }
@@ -1061,8 +1056,7 @@ const char *set_convert_domain(cmd_parms *cmd, void *dummy, const char *f, const
                      "[notice] The domain (%s) is not licensed.", f);
          exit(-1);
     }
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set convert domains ok, %s:%s",f,r);
+
     return NULL;
 }
 
@@ -1070,8 +1064,6 @@ const char *set_convert_domain(cmd_parms *cmd, void *dummy, const char *f, const
 const char *set_addr_domain(cmd_parms *cmd, void *dummy, const char *f, const char *r)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_addr_domain...... %s:%s",f,r);
     server_rec *s = cmd->server;
     svr_config *conf =
             (svr_config *) ap_get_module_config(s->module_config, &fjt_module);
@@ -1107,23 +1099,19 @@ const char *set_addr_domain(cmd_parms *cmd, void *dummy, const char *f, const ch
         }
         next->next = addrdomain;
     }
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_addr_domain ok, %s:%s",f,r);
+
     return NULL;
 }
 
 const char *set_host_addr_port(cmd_parms *parms, void *dummy, int flag)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_host_addr_port......");
     svr_config *psf =
             ap_get_module_config(parms->server->module_config, &fjt_module);
 
     psf->m_iHostAddrPort = flag;
     psf->m_iHostAddrPort_set = 1;
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_host_addr_port ok!");
+
     return NULL;
 }
 
@@ -1131,8 +1119,6 @@ const char *set_host_addr_port(cmd_parms *parms, void *dummy, int flag)
 const char *set_page_size(cmd_parms *parms, void *struct_ptr, const char *arg)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_page_size......");
     svr_config *psf =
             ap_get_module_config(parms->server->module_config, &fjt_module);
 
@@ -1142,31 +1128,25 @@ const char *set_page_size(cmd_parms *parms, void *struct_ptr, const char *arg)
 
     psf->WebPageMaxSize = val * 1024;
     psf->WebPageMaxSize_set = 1;
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_page_size ok!");
+
     return NULL;
 }
 
 const char *set_enable_convert_api(cmd_parms *parms, void *dummy, int flag)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_enable_convert_api......");
     svr_config *psf =
             ap_get_module_config(parms->server->module_config, &fjt_module);
 
     psf->m_iExportApi = flag;
     psf->m_iExportApi_set = 1;
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_enable_convert_api ok!");
+
     return NULL;
 }
 
 const char *set_binfile_ext(cmd_parms *parms, void *struct_ptr, const char *arg)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_binfile_ext......");
     svr_config *psf =
             ap_get_module_config(parms->server->module_config, &fjt_module);
     {
@@ -1194,16 +1174,12 @@ const char *set_binfile_ext(cmd_parms *parms, void *struct_ptr, const char *arg)
         psf->m_iBinaryFileExt = val;
     }
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_binfile_ext ok!");
 
     return NULL;
 }
 
 const char *set_htmlfile_ext(cmd_parms *parms, void *struct_ptr, const char *arg)
 {
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_binfile_ext ......");
     svr_config *psf =
             ap_get_module_config(parms->server->module_config, &fjt_module);
 
@@ -1231,16 +1207,12 @@ const char *set_htmlfile_ext(cmd_parms *parms, void *struct_ptr, const char *arg
         }
         psf->m_iHtmlFileExt = val;
     }
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_htmlfile_ext ok!");
     return NULL;
 }
 
 const char *set_keepurlsuffix_ext(cmd_parms *parms, void *struct_ptr, const char *arg)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_keepurlsuffix_ext ......");
     svr_config *psf =
             ap_get_module_config(parms->server->module_config, &fjt_module);
 
@@ -1268,8 +1240,7 @@ const char *set_keepurlsuffix_ext(cmd_parms *parms, void *struct_ptr, const char
         }
         psf->m_iKeepUrlSuffix = val;
     }
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_keepurlsuffix_ext ok!");
+
     return NULL;
 }
 
@@ -1279,8 +1250,6 @@ const char *set_keepurlsuffix_ext(cmd_parms *parms, void *struct_ptr, const char
 const char* use_table(cmd_parms *cmd, void *dummy, const char *ss)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "use_table ......");
     config *conf = (config*)dummy;
 
     if(!conf){
@@ -1290,8 +1259,7 @@ const char* use_table(cmd_parms *cmd, void *dummy, const char *ss)
         conf->m_pUseTableFile = apr_table_make(cmd->pool, 10);
     }
     apr_table_set(conf->m_pUseTableFile, ss, ss);
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "use_table ok!");
+
     return NULL;
 }
 
@@ -1299,39 +1267,31 @@ const char* use_table(cmd_parms *cmd, void *dummy, const char *ss)
 const char*set_change_chinese_level(cmd_parms *parms, void *dummy, const char *arg)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_change_chinese_level......");
     config *conf = (config*)dummy;
     if(!conf){
         return NULL;
     }
     conf->m_iChangeChineseLevel = atoi(arg);
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "set_change_chinese_level ok!");
+
     return NULL;
 }
 
 const char*redirect_tip_time(cmd_parms *parms, void *dummy, const char *arg)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "redirect_tip_time......");
     config *conf = (config*)dummy;
     if(!conf){
         return NULL;
     }
 
     conf->m_iRedirectTipTime = atoi(arg);
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "redirect_tip_time ok！");
+
     return NULL;
 }
 
 const char *force_redirect_tip(cmd_parms *cmd, void *dummy, int flag)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "force_redirect_tip......");
     config *conf = (config*)dummy;
     if(!conf){
         return NULL;
@@ -1340,8 +1300,6 @@ const char *force_redirect_tip(cmd_parms *cmd, void *dummy, int flag)
         return NULL;
     conf->m_iForceRedirectTip = flag;
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "force_redirect_tip ok");
     return NULL;
 }
 
@@ -1539,8 +1497,6 @@ const char *set_value_change_chinese(cmd_parms *cmd, void *dummy, const char *ss
 const char *force_convert_page(cmd_parms *cmd, void *dummy, int flag)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "force_convert_page ......");
     config *conf = (config*)dummy;
     if(!conf){
         return NULL;
@@ -1549,16 +1505,12 @@ const char *force_convert_page(cmd_parms *cmd, void *dummy, int flag)
         return NULL;
     conf->m_iForceConvertPage = flag;
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "force_convert_page ok");
     return NULL;
 }
 
 const char *send_url_utf(cmd_parms *cmd, void *dummy, int flag)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "send_url_utf ......");
     config *conf = (config*)dummy;
     if(!conf){
         return NULL;
@@ -1567,16 +1519,12 @@ const char *send_url_utf(cmd_parms *cmd, void *dummy, int flag)
         return NULL;
     conf->m_iSendURLsAsUTF8 = flag;
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "send_url_utf ok!");
     return NULL;
 }
 
 const char *not_replace_url(cmd_parms *cmd, void *dummy, int flag)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "not_replace_url ......");
     config *conf = (config*)dummy;
     if(!conf){
         return NULL;
@@ -1585,16 +1533,12 @@ const char *not_replace_url(cmd_parms *cmd, void *dummy, int flag)
         return NULL;
     conf->m_iNotReplaceUrl = flag;
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "not_replace_url ok!");
     return NULL;
 }
 
 const char *convert_cookie(cmd_parms *cmd, void *dummy, int flag)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "convert_cookie ......");
     config *conf = (config*)dummy;
     if(!conf){
         return NULL;
@@ -1603,15 +1547,11 @@ const char *convert_cookie(cmd_parms *cmd, void *dummy, int flag)
         return NULL;
     conf->m_iConvertCookie = flag;
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "convert_cookie OK!");
     return NULL;
 }
 
 const char *convert_ContentDisposition(cmd_parms *cmd, void *dummy, int flag)
 {
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "convert_ContentDisposition ......");
     config *conf = (config*)dummy;
     if(!conf){
         return NULL;
@@ -1619,16 +1559,12 @@ const char *convert_ContentDisposition(cmd_parms *cmd, void *dummy, int flag)
     if (cmd->path == NULL)
         return NULL;
     conf->m_iConvertContentDisposition = flag;
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "convert_ContentDisposition OK");
     return NULL;
 }
 
 const char *merge_cookie(cmd_parms *cmd, void *dummy, int flag)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "merge_cookie ......");
     config *conf = (config*)dummy;
     if(!conf){
         return NULL;
@@ -1637,16 +1573,12 @@ const char *merge_cookie(cmd_parms *cmd, void *dummy, int flag)
         return NULL;
     conf->m_iMergeCookie = flag;
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "merge_cookie ok");
     return NULL;
 }
 
 const char *add_url_prefix_to_parameter(cmd_parms *cmd, void *dummy, int flag)
 {
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "AddUrlPrefixToParameter ......");
     config *conf = (config*)dummy;
     if(!conf){
         return NULL;
@@ -1655,8 +1587,7 @@ const char *add_url_prefix_to_parameter(cmd_parms *cmd, void *dummy, int flag)
         return NULL;
     conf->m_iAddUrlPrefixToParameter = flag;
 
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "AddUrlPrefixToParameter ok");
+
     return NULL;
 }
 
@@ -1665,7 +1596,7 @@ int check_domain_of_license(char *domain, apr_table_t *allowed_domains){
     table_entry *reqhdrs;
     int i;
 
-    printf("check_domain_of_license %i\n",allowed_domains);
+//    printf("check_domain_of_license %i\n",allowed_domains);
 
     reqhdrs_arr = (array_header *) apr_table_elts(allowed_domains);
     if (!reqhdrs_arr) {

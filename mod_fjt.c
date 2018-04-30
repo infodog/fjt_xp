@@ -85,7 +85,7 @@ void exception_handler(int sig) {
 
     nptrs = backtrace(buffer, 100);
 
-    printf("backtrace() returned %d addresses\n", nptrs);
+//    printf("backtrace() returned %d addresses\n", nptrs);
 
     strings = backtrace_symbols(buffer, nptrs);
     if (strings == NULL) {
@@ -95,7 +95,7 @@ void exception_handler(int sig) {
 
     for (j = 0; j < nptrs; j++)
 
-    printf("  [%02d] %s\n", j, strings[j]);
+//    printf("  [%02d] %s\n", j, strings[j]);
 
     free(strings);
     exit(-1);
@@ -905,6 +905,8 @@ static int fjt_post_config(apr_pool_t *pconf, apr_pool_t *plog,
 static void fjt_register_hooks(apr_pool_t *p) {
     signal(SIGSEGV, exception_handler); /* // install our handler */
 
+    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL, "[Info] fjt v5.0 with ssl");
+
     init_not_found_urls_cache(p);
 
     ap_hook_fixups(find_code_page, NULL, NULL, APR_HOOK_MIDDLE);
@@ -1227,7 +1229,7 @@ static void *my_merge_svr_config(apr_pool_t *p, void *basev, void *overridesv) {
     newconf->nFriendlyDomain = (overrides->nFriendlyDomain == 0) ? base->nFriendlyDomain : overrides->nFriendlyDomain;
     newconf->timeCheckPoint = (overrides->timeCheckPoint == 0) ? base->timeCheckPoint : overrides->timeCheckPoint;
     newconf->allowed_domain = (overrides->nYesDomain == 0) ? base->allowed_domain : overrides->allowed_domain;
-    printf("merge_svr_config = %i\n",newconf->allowed_domain);
+//    printf("merge_svr_config = %i\n",newconf->allowed_domain);
     newconf->exclude_domain = (overrides->nExcludeDomain == 0) ? base->exclude_domain : overrides->exclude_domain;
     newconf->friendly_domain = (overrides->nFriendlyDomain == 0) ? base->friendly_domain : overrides->friendly_domain;
 

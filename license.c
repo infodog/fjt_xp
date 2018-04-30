@@ -202,7 +202,7 @@ int ICL_GetPlainFromPKCS7mem(char *asPKCS7,
     sk=PKCS7_get_signer_info(p7);
     if (sk == NULL)
     {
-        printf("there are no signatures on this data\n");
+//        printf("there are no signatures on this data\n");
         ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL, 
             "there are no signatures on this data - license file");
         exit(1);
@@ -587,11 +587,9 @@ int ReadLicense()
     }
     
     lcxLicense[cbLicense] = 0;
-    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "before ICL_GetPlainFromPKCS7mem");
+
     ICL_GetPlainFromPKCS7mem( lcxLicense, gcxCert, g_cxLicense, &cbPlainLicense);
-	ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-        "after ICL_GetPlainFromPKCS7mem");
+
     if (cbPlainLicense == 0 ) 
         return 0; 
     
@@ -739,7 +737,7 @@ int CheckLicense(svr_config *conf, pool *p, char *domain)
     int  nLic;
     char *pDomain;
     char lockip[256] = {'\0'};
-    printf("CheckLicense.....\n");
+//    printf("CheckLicense.....\n");
     if (g_iLicenseInitialized == 0)
     {
         ResetCert(gcxCert);
