@@ -196,7 +196,7 @@ static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
 
     const char *mime_type = f->r->content_type;
     int shouldDo = 0;
-    if (mime_type && (strncasecmp(mime_type, "text/", 5) == 0 || strncasecmp(mime_type, "application/json", 16) == 0)){
+    if (mime_type && (strncasecmp(mime_type, "text/", 5) == 0 || strncasecmp(mime_type, "application/json", 16) == 0 || strstr(mime_type, "javascript")!=NULL)){
         shouldDo = 1;
     }
     if(!shouldDo){
