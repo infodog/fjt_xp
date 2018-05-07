@@ -6,5 +6,4 @@
 #include "http_protocol.h"
 #include "ap_config.h"
 extern module AP_MODULE_DECLARE_DATA fjt_module;
-
 #endif

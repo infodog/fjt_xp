@@ -1591,7 +1591,7 @@ const char *add_url_prefix_to_parameter(cmd_parms *cmd, void *dummy, int flag)
     return NULL;
 }
 
-int check_domain_of_license(char *domain, apr_table_t *allowed_domains){
+int match_domain(char *domain, apr_table_t *allowed_domains){
     array_header *reqhdrs_arr;
     table_entry *reqhdrs;
     int i;
@@ -1616,6 +1616,17 @@ int check_domain_of_license(char *domain, apr_table_t *allowed_domains){
         }
     }
     return 0;
-
 }
 
+
+
+const char *set_not_licensed_page(cmd_parms *cmd, void *dummy, const char *ss){
+    config *conf = (config*)dummy;
+    if(!conf){
+        return NULL;
+    }
+    if (cmd->path == NULL)
+        return NULL;
+    conf->m_pcNotLicensedPage = apr_pstrdup(cmd->pool,ss);
+    return NULL;
+}

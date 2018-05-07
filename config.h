@@ -203,6 +203,8 @@ typedef struct config
 	struct config *m_pnext;
 	struct config *m_pprev;
 
+	char *m_pcNotLicensedPage;
+
 } config;
 
 

@@ -108,8 +108,18 @@ static int fjt_handler(request_rec *r) {
     }
     r->content_type = "text/html";
 
-    if (!r->header_only)
-        ap_rputs("domain is not licensed. FJT is licensed  to FJT corporation.\n", r);
+    if (!r->header_only){
+        if(r->filename==NULL){
+            ap_rputs("domain is not licensed. FJT is licensed  to FJT corporation.\n", r);
+            return DONE;
+        }
+        else{
+            ap_internal_redirect(r->filename,r);
+            return DONE;
+        }
+
+    }
+
     return OK;
 }
 
@@ -479,17 +489,6 @@ static int find_code_page(request_rec *r) {
         return DECLINED;
     }
 
-    char *pabsurl = r->filename + 6;
-    char *domain = getDomain(pabsurl, r->pool);
-    if(!check_domain_of_license(domain,svr_conf->allowed_domain)){
-        printf("domain not licensed:%s\n",domain);
-        r->status = 506;
-        r->handler = "fjt";
-        r->filename = "/fjt_not_license.html";
-        return OK;
-    }
-
-
     fjtconf *session = (fjtconf *) apr_palloc(r->pool, sizeof(fjtconf));
     memset(session,0,sizeof(fjtconf));
     session->p = r->pool;
@@ -504,6 +503,40 @@ static int find_code_page(request_rec *r) {
     session->tmpbb =  apr_brigade_create(r->pool,r->connection->bucket_alloc);
 //        session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool,r->uri);
     init_session(session,r,r->pool);
+
+
+    char *pabsurl = r->filename + 6;
+    char *domain = getDomain(pabsurl, r->pool);
+    if(!match_domain(domain,svr_conf->allowed_domain)){
+        if(match_domain(domain,svr_conf->friendly_domain)){
+            r->status = 302;
+            char *pfilename = r->filename;
+            if(strnistr(pfilename,"-ifbase",strlen(pfilename))){
+                pfilename = UnChangeChinese(r->pool,dc,session,pfilename);
+            }
+            r->handler = "fjt";
+
+            apr_table_set(r->headers_out, "Location", pfilename+6);
+            r->filename = NULL;
+            return OK;
+        }
+        else{
+            r->status = 506;
+            r->handler = "fjt";
+            if(dc->m_pcNotLicensedPage){
+                r->filename = dc->m_pcNotLicensedPage;
+            }
+            else{
+                r->filename = NULL;
+            }
+            return OK;
+        }
+
+    }
+
+
+
+
 
     //某些图片服务器，通过Referer来防止盗图
     apr_table_unset(r->headers_in,"Referer");
@@ -837,6 +870,9 @@ static const command_rec fjt_cmds[] = {
         AP_INIT_FLAG("MergeCookie", merge_cookie, NULL, ACCESS_CONF, "merge same key/value in cookie"),
         AP_INIT_FLAG("AddUrlPrefixToParameter", add_url_prefix_to_parameter, NULL, ACCESS_CONF,
                      "add_url_prefix_to_parameter"),
+
+        AP_INIT_TAKE1("InfoscapeNotLicensedPage", set_not_licensed_page, NULL, ACCESS_CONF,
+                      "Set error page path, when the domain is not licensed."),
         {NULL}
 };
 
@@ -1056,6 +1092,8 @@ static void *my_create_dir_conf(apr_pool_t *p, char *x) {
     conf->m_iValueChangeChineseLevel = -1;
     conf->m_iInConvertUnicode = -1;
 
+    conf->m_pcNotLicensedPage = NULL;
+
     /* Set up the default values for fields of dir */
 
     return conf;
@@ -1186,6 +1224,7 @@ static void *my_merge_dir_conf(apr_pool_t *pool, void *BASE, void *ADD) {
 
         conf->m_usetable = add->m_usetable?add->m_usetable:base->m_usetable;
         conf->m_negtable = add->m_negtable?add->m_negtable:base->m_negtable;
+        conf->m_pcNotLicensedPage = add->m_pcNotLicensedPage?add->m_pcNotLicensedPage:base->m_pcNotLicensedPage;
     }
 
     //现在已经获得了configure, 开始初始化

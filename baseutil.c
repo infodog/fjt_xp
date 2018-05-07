@@ -6,6 +6,7 @@
 #include "baseutil.h"
 #include "convert.h"
 #include "apr_base64.h"
+#include "config_utils.h"
 
 #define API_EXPORT(x) x
 #ifdef CHARSET_EBCDIC
@@ -1041,7 +1042,15 @@ char* build_absolute_path(pool *apool, ConvertCtx *apCtx, config* pconf, char *a
 		return NULL; 
 	}    
 	url[p1 - p] = 0; 
-	
+
+	if(url[0]=='/' && url[1]=='/' && url[2]!='/'){
+		if(strnicmp(baseurl,"https:",6)==0){
+			return apr_pstrcat(apool,"https:",url,NULL);
+		}
+		else{
+			return apr_pstrcat(apool,"http:",url,NULL);
+		};
+	}
 	if (url[0]=='?') {
 		lpNewPath = apr_palloc(apCtx->p,2350);
 		strcpy(lpNewPath, baseurl); 
@@ -1054,7 +1063,8 @@ char* build_absolute_path(pool *apool, ConvertCtx *apCtx, config* pconf, char *a
 		strcat(lpNewPath, url); 
 		return lpNewPath; 
 	}
-	
+
+
 	if (strnchr(url, 16, ':')) {
 		lpNewPath = lpNewPath = apr_palloc(apCtx->p,2350);
 		strcpy(lpNewPath, url); 
@@ -1395,13 +1405,22 @@ int ChangeUrl(pool *apool, ConvertCtx *apCtx, config* pconf, char *apurl, int ns
 	if (!pabsurl) {
 		return 0;
 	}
+
 	if (strnicmp(pabsurl, "http://", 7) != 0  && strnicmp(pabsurl, "https://", 8) != 0) {
 	    //如果build出来的url不是http或者https开头，证明出错了？比如是FTP呢？
 		*pNewUrl = apurl;
 		*nNewUrl = nsize;
 		return 0;
 	}
-	
+
+    char *domain = getDomain(pabsurl, apool);
+
+    if(domain!=NULL && match_domain(domain,apCtx->svr_conf->exclude_domain)){
+        *pNewUrl = apurl;
+        *nNewUrl = nsize;
+        return 0;
+    }
+
 	{
 		if (KeepUrlSuffix(apCtx, pconf, pabsurl) != 0) {
 			*pNewUrl = pabsurl;
@@ -2068,6 +2087,7 @@ char *getDomain(char *pabsurl, apr_pool_t *pool){
             return NULL;
         }
         strcpy(presult,pdomain);
+        return presult;
     }
 }
 
