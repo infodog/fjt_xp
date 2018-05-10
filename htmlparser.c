@@ -580,14 +580,55 @@ int ReplaceHTTPAndConvert(ConvertCtx *pctx, memstream *apwrite, config *pconf, c
 
 	if(p!=NULL){
 		char *purlEnd = strnistr(p,")",pend - p + 1);
+		if(*(p-1)=='\'' || *(p-1)=='\"'){
+		    //寻找到匹配的
+            char c = *(p-1);
+            char *pquoteEnd = p;
+            while(*pquoteEnd != c && pend > pquoteEnd){
+                pquoteEnd+=1;
+            }
+
+            if(purlEnd > pquoteEnd){
+            	//这不是一个完整的url(结构
+				ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,p - pcur);
+				memstream_write(apwrite,p, 4);
+				pcur = p + 4;
+				ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,pend - pcur + 1);
+				return 1;
+            }
+		}
+
 		if(purlEnd!=NULL){
-			ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,p - pcur + 4);
-			char *pNewUrl;
-			int nNewUrl;
-			ChangeUrl(pctx->p, pctx, pconf, p+4,purlEnd - p - 4, &pNewUrl, &nNewUrl);
-			memstream_write(apwrite,pNewUrl,nNewUrl);
-			ReplaceHTTPAndConvert(pctx,apwrite,pconf,purlEnd,pend - purlEnd + 1);
-            return 1;
+		    //首先找到开始的引号
+            p = p+4; //should point to pos after url(
+            while(*p == ' ' || *p =='\t' || *p=='\r' || *p=='\n' || *p=='\'' || *p=='\"' || *p==';'){
+                p=p+1;
+                if(p >= purlEnd){
+                    break;
+                }
+            }
+            purlEnd = purlEnd -1;
+            while(*purlEnd == ' ' || *purlEnd =='\t' || *purlEnd=='\r' || *purlEnd=='\n' || *purlEnd=='\'' || *purlEnd=='\"' || *purlEnd==';'){
+            	purlEnd--;
+				if(p >= purlEnd){
+					break;
+				}
+            }
+			if(p<purlEnd){
+				ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,p - pcur);
+				char *pNewUrl;
+				int nNewUrl;
+				ChangeUrl(pctx->p, pctx, pconf, p,purlEnd - p + 1, &pNewUrl, &nNewUrl);
+				memstream_write(apwrite,pNewUrl,nNewUrl);
+				ReplaceHTTPAndConvert(pctx,apwrite,pconf,purlEnd + 1,pend - purlEnd);
+				return 1;
+			}
+			else{
+				ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,p - pcur);
+				pcur = p;
+				ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,pend - pcur + 1);
+				return 1;
+            }
 		}
 		else{
             ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,p - pcur);
