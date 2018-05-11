@@ -669,6 +669,10 @@ int ReplaceHTTPAndConvert(ConvertCtx *pctx, memstream *apwrite, config *pconf, c
 			}
 		}
 		if(purlEnd!=NULL){
+		    if((*purlEnd=='\'' || *purlEnd=='\"') && (*(purlEnd-1)=='\\')){
+		        //这是针对javascript里面 "href=\"http://www.csv.com\" ..., 类似的情况
+		        purlEnd = purlEnd - 1;
+		    }
 			ReplaceHTTPAndConvert(pctx,apwrite,pconf,pcur,p - pcur);
 			char *pNewUrl;
 			int nNewUrl;
