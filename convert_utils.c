@@ -46,7 +46,7 @@ unsigned char * skipSpace(unsigned char *p, unsigned char *pend,int isUtf16){
                 return pend;
             }
             unsigned char c2 = *(p+1);
-            if(c1==0 && (c2=='\t' || c2==' ')){
+            if(c1==0 && (c2=='\t')){
                 p+=2;
                 continue;
             }
@@ -57,7 +57,7 @@ unsigned char * skipSpace(unsigned char *p, unsigned char *pend,int isUtf16){
         }
         else{
             unsigned char c1 = *p;
-            if(c1==' ' || c1=='\t'){
+            if(c1=='\t'){
                 p++;
             }
             else{
@@ -109,19 +109,18 @@ unsigned char * findSpace(unsigned char *p, unsigned char *pend,int isUtf16){
                 return pend;
             }
             unsigned char c2 = *(p+1);
-            if(c1==0 && (c2=='\t' || c2==' ')){
+            if(c1==0 && (c2=='\t')){
                 return p;
             }
             p+=2;
         }
         else{
             unsigned char c1 = *p;
-            if(c1=='\t' || c1==' '){
+            if(c1=='\t'){
                 return p;
             }
             p++;
         }
-
     }
     return NULL;
 }
