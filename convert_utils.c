@@ -179,7 +179,7 @@ unsigned char *skipBom(unsigned char *pcur){
 }
 int initFile(ruletable *wordlist[], ruletable *reverselist[], char *filename,int isUtf16){
 
-    printf("initFile filename=%s, isUtf16=%i\n",filename,isUtf16);
+//    printf("initFile filename=%s, isUtf16=%i\n",filename,isUtf16);
 
     int nfile = filesize(filename);
     unsigned char *pcontent = malloc(nfile);
@@ -228,10 +228,6 @@ int initFile(ruletable *wordlist[], ruletable *reverselist[], char *filename,int
 
         if(wordlist){
             line++;
-            if(line<5){
-                printf("----initFile filename=%s, isUtf16=%i, line=%i,len_w1=%i,len_w2=%i\n",filename,isUtf16,line, len_w1,len_w2);
-            }
-
             addRule(wordlist,w1,len_w1,w2,len_w2);
         }
 
