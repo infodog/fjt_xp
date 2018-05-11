@@ -46,7 +46,7 @@ unsigned char * skipSpace(unsigned char *p, unsigned char *pend,int isUtf16){
                 return pend;
             }
             unsigned char c2 = *(p+1);
-            if(c1==0 && (c2=='\t')){
+            if(c1==0 && (c2=='\t' || c2=='|')){
                 p+=2;
                 continue;
             }
@@ -109,7 +109,7 @@ unsigned char * findSpace(unsigned char *p, unsigned char *pend,int isUtf16){
                 return pend;
             }
             unsigned char c2 = *(p+1);
-            if(c1==0 && (c2=='\t')){
+            if(c1==0 && (c2=='\t' || c2=='|')){
                 return p;
             }
             p+=2;
@@ -171,7 +171,15 @@ void addRule(ruletable *ruletables[],unsigned char *w1, int len_w1,unsigned char
 //    printf("%i\n",ncount);
 }
 
+unsigned char *skipBom(unsigned char *pcur){
+    if(*pcur==0xFE && *(pcur+1)==0xFF){
+        return pcur+2;
+    }
+    return pcur;
+}
 int initFile(ruletable *wordlist[], ruletable *reverselist[], char *filename,int isUtf16){
+
+    printf("initFile filename=%s, isUtf16=%i\n",filename,isUtf16);
 
     int nfile = filesize(filename);
     unsigned char *pcontent = malloc(nfile);
@@ -182,6 +190,8 @@ int initFile(ruletable *wordlist[], ruletable *reverselist[], char *filename,int
     unsigned char *pcur = pcontent;
     unsigned char *w1, *w2;
     int len_w1=0, len_w2=0;
+    int line = 0;
+    pcur = skipBom(pcur);
     while(pcur < pend){
         pcur = skipSpace(pcur,pend,isUtf16);
         if(pcur==NULL){
@@ -205,7 +215,7 @@ int initFile(ruletable *wordlist[], ruletable *reverselist[], char *filename,int
         pcur = skipSpace(pcur,pend,isUtf16);
         unsigned char *pendW2 = findLineBreak(pcur,pend,isUtf16);
         if(pendW2 == NULL){
-            break;
+            pendW2 = pend;
         }
         len_w2 = pendW2 - pcur;
         w2 = malloc(len_w2);
@@ -217,6 +227,11 @@ int initFile(ruletable *wordlist[], ruletable *reverselist[], char *filename,int
         //找到了两个词 w1, w2,现在处理这两个词
 
         if(wordlist){
+            line++;
+            if(line<5){
+                printf("----initFile filename=%s, isUtf16=%i, line=%i,len_w1=%i,len_w2=%i\n",filename,isUtf16,line, len_w1,len_w2);
+            }
+
             addRule(wordlist,w1,len_w1,w2,len_w2);
         }
 
