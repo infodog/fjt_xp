@@ -249,7 +249,6 @@ int compare_rule(const rule **r1, const rule** r2){
         //r==0
         return (*r2)->lenreal - (*r1)->lenreal;
     }
-
 }
 
 void adjust_ruletable(ruletable *wordlist[]){
@@ -269,7 +268,6 @@ void adjust_ruletable(ruletable *wordlist[]){
 
             qsort(ptable->rules,ptable->num_rule,sizeof(rule*),compare_rule);
         }
-
     }
 
 }

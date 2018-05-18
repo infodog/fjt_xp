@@ -1630,3 +1630,13 @@ const char *set_not_licensed_page(cmd_parms *cmd, void *dummy, const char *ss){
     conf->m_pcNotLicensedPage = apr_pstrdup(cmd->pool,ss);
     return NULL;
 }
+
+const char *set_not_convert_404(cmd_parms *cmd, void *dummy, int flag){
+    config *conf = (config*)dummy;
+    if(!conf){
+        return NULL;
+    }
+    conf->m_iNotConvert404  = flag;
+    return NULL;
+}
+

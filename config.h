@@ -202,8 +202,8 @@ typedef struct config
 	table *m_pUseTableFile;
 	struct config *m_pnext;
 	struct config *m_pprev;
-
 	char *m_pcNotLicensedPage;
+	int m_iNotConvert404;
 
 } config;
 

@@ -118,4 +118,5 @@ const char *force_convert_page(cmd_parms *cmd, void *dummy, int flag);
 const char *set_not_licensed_page(cmd_parms *cmd, void *dummy, const char *ss);
 
 int match_domain(char *domain, apr_table_t *allowed_domains);
+const char *set_not_convert_404(cmd_parms *cmd, void *dummy, int flag);
 #endif

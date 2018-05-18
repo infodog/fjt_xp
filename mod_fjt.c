@@ -202,6 +202,9 @@ static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
             apr_table_setn(f->r->headers_out, "Location", pfilename);
             return APR_SUCCESS;
         }
+        else if(dc->m_iNotConvert404){
+            return ap_pass_brigade(f->next, bb);
+        }
     }
 
     const char *mime_type = f->r->content_type;
@@ -870,7 +873,8 @@ static const command_rec fjt_cmds[] = {
         AP_INIT_FLAG("MergeCookie", merge_cookie, NULL, ACCESS_CONF, "merge same key/value in cookie"),
         AP_INIT_FLAG("AddUrlPrefixToParameter", add_url_prefix_to_parameter, NULL, ACCESS_CONF,
                      "add_url_prefix_to_parameter"),
-
+        AP_INIT_FLAG("NotConvert404", set_not_convert_404, NULL, ACCESS_CONF,
+                     "是否convert 404 页面"),
         AP_INIT_TAKE1("InfoscapeNotLicensedPage", set_not_licensed_page, NULL, ACCESS_CONF,
                       "Set error page path, when the domain is not licensed."),
         {NULL}
@@ -1093,6 +1097,7 @@ static void *my_create_dir_conf(apr_pool_t *p, char *x) {
     conf->m_iInConvertUnicode = -1;
 
     conf->m_pcNotLicensedPage = NULL;
+    conf->m_iNotConvert404 = -1;
 
     /* Set up the default values for fields of dir */
 
@@ -1225,6 +1230,8 @@ static void *my_merge_dir_conf(apr_pool_t *pool, void *BASE, void *ADD) {
         conf->m_usetable = add->m_usetable?add->m_usetable:base->m_usetable;
         conf->m_negtable = add->m_negtable?add->m_negtable:base->m_negtable;
         conf->m_pcNotLicensedPage = add->m_pcNotLicensedPage?add->m_pcNotLicensedPage:base->m_pcNotLicensedPage;
+
+        conf->m_iNotConvert404 = (add->m_iNotConvert404==-1) ? base->m_iNotConvert404:add->m_iNotConvert404;
     }
 
     //现在已经获得了configure, 开始初始化
