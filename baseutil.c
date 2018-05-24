@@ -1520,6 +1520,22 @@ int ChangeUrl(pool *apool, ConvertCtx *apCtx, config* pconf, char *apurl, int ns
 	return 1; 
 }
 
+int isGoodUrlChar(char c){
+	if(c >= '0' && c<='9') {
+		return 1;
+	}
+	if(c >='a' && c <= 'z'){
+		return 1;
+	}
+	if(c >= 'A' && c <= 'Z'){
+		return 1;
+	}
+	if(c=='.' || c== '_' || c=='-' || c=='?' || c=='#' || c=='@' || c==';' || c==',' || c=='/'){
+		return 1;
+	}
+	return 0;
+}
+
 char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, int nsize)
 {
 	int n, len; 
@@ -1570,7 +1586,7 @@ char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, 
 	
 	while (pt < pend) {
 		//有汉字，有%, 有' 有"
-		if ((*pt & 0x80) || *pt == '%' || *pt == '\'' || *pt == '\"') {
+		if (!isGoodUrlChar(*pt)) {
 			break; 
 		} 
 		++pt; 
@@ -1583,7 +1599,8 @@ char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, 
 	else if (pconf->m_iChangeChineseLevel > 0) {
 		pb = pt; 
 	}
-	
+
+	//此时pb指向需要changechinese的位置
 	pnurl = GetBuffArray(apCtx, 3, apCtx->prefix_len); 
 	memcpy(pnurl, apurl, pb - apurl); 
 	pout = pnurl + (pb - apurl); 
@@ -1605,70 +1622,40 @@ char* ChangeChinese(pool *apool, ConvertCtx *apCtx, config *pconf, char *apurl, 
 		pout += 8; 
 	}
 	
-	pe = pb + 1; 
-	while (pb < pend) {
-		while (*pe != '/' && *pe != ';' && *pe != '?' && pe < pend) {
-			++pe; 
+	if (pb < pend) {
+		pe = pend-1;
+		while (isGoodUrlChar(*pe)) {
+			--pe;
+			if(pe<pb){
+				break;
+			}
 		}
-		
-		{
+
+		if(pe >= pb){
 			char blen[64]; 
 			char buff[2560]; 
-			char *ptest = pb; // WPF 2008-07-16
-			
-			while (ptest < pe) {
-				if (*ptest == '%' || (*ptest & 0x80)) {
-					ptest = NULL;
-					break;
-				}
-				++ptest;
-			}
-			if (ptest == NULL) {
-			    //如果有%，表明有中文
-				if (pconf->m_iChangeChineseLevel < 5) {
-					len = if_xbase64encode(buff, pb, pe - pb) - 1; 
-					if (len > 0) {                
-						memcpy(pout, "-base", 5); 
-						pout += 5; 
-						itoa(len, blen, 10); 
-						n = strlen(blen); 
-						memcpy(pout, blen, n); 
-						pout += n; 
-						*pout++ = '-'; 
-						memcpy(pout, buff, len); 
-						pout += len; 
-					}
-				}
-				else {
-				    //如果大于5表明要对url进行转码，回来的时候再反转码
-					int nin = pe - pb;
-					
-					if (pout - pnurl + nin * 4 >= apCtx->nBuffArraySize) {
-						return apurl;
-					}
-					len = ConvertToUnicodeExt(pconf->m_iFromEncode, FFFE, 1, pb, nin, pout);					
-					if (len > 0) {
-						pout += len;
-					}
-				}
-			}
-			else {
-				//如果根本没有中文，则直接输出
-				memcpy(pout, pb, pe - pb);
-				pout += pe - pb;
+
+			//如果有%，表明有中文
+			len = if_xbase64encode(buff, pb, pe - pb + 1) - 1;
+			if (len > 0) {
+				memcpy(pout, "-base", 5);
+				pout += 5;
+				itoa(len, blen, 10);
+				n = strlen(blen);
+				memcpy(pout, blen, n);
+				pout += n;
+				*pout++ = '-';
+				memcpy(pout, buff, len);
+				pout += len;
 			}
 		}
 		
-		if (pe < pend) {
-			*pout++ = *pe; 
-			if (*pe == '?' && pconf->m_iChangeChineseLevel < 4) {
-				pb = pe + 1; 
-				pe = pend - 1; 
-				continue; 
-			}            
+		pe++;
+		while(pe < pend){
+			*pout = *pe;
+			pout++;
+			pe++;
 		}
-		
-		pb = ++pe; 
 	}
 	
 	*pout = '\0'; 

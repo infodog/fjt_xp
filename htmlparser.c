@@ -577,9 +577,28 @@ int ReplaceHTTPAndConvert(ConvertCtx *pctx, memstream *apwrite, config *pconf, c
 	        p = NULL;
 	    }
 	}
-
+	char *purlEnd = NULL;
 	if(p!=NULL){
-		char *purlEnd = strnistr(p,")",pend - p + 1);
+		purlEnd = strnistr(p,")",pend - p + 1);
+		if(purlEnd == NULL){
+			p = NULL;
+		}
+		else{
+			//如果在 ")"之前有引号，也不转，很可能是javascript的表达式
+			char *ptemp = p;
+			while(ptemp < purlEnd){
+				if(*ptemp == '"' || *ptemp== '\''){
+					p = NULL;
+					break;
+				}
+				ptemp++;
+			}
+		}
+	}
+
+
+	if(p!=NULL && purlEnd !=NULL){
+
 		if(*(p-1)=='\'' || *(p-1)=='\"'){
 		    //寻找到匹配的
             char c = *(p-1);

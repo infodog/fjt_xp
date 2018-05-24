@@ -212,9 +212,18 @@ static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
     if (mime_type && (strncasecmp(mime_type, "text/", 5) == 0 || strncasecmp(mime_type, "application/json", 16) == 0 || strstr(mime_type, "javascript")!=NULL)){
         shouldDo = 1;
     }
+    if(mime_type && (strncasecmp(mime_type, "text/css", 8) == 0)){
+        shouldDo = 0;
+    }
+    int len = strlen(f->r->filename);
+    if(strnistr(f->r->filename,".woff2",len) || strnistr(f->r->filename,".woff",len) || strnistr(f->r->filename,".ttf",len)){
+        shouldDo = 0;
+    }
+
     if(!shouldDo){
         return ap_pass_brigade(f->next, bb);
     }
+
 
     //转换后长度会变化，所以删除content-length
     if(!ctx->processed){
