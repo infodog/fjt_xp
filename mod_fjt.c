@@ -195,7 +195,7 @@ static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
             char *origurl = (char*) apr_table_get(f->r->subprocess_env, "ORIG_URL");
             addUrlNotFound(origurl);
             f->r->status = 302;
-            char *pfilename = f->r->unparsed_uri;
+            char *pfilename = oldurl;
             if(strnistr(pfilename,"-ifbase",strlen(pfilename))){
                 pfilename = UnChangeChinese(f->r->pool,dc,ctx,pfilename);
             }
