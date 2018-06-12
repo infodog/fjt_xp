@@ -534,6 +534,7 @@ static fjtconf * registerSession(request_rec *r){
 //        session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool,r->uri);
     init_session(session,r,r->pool);
     ap_set_module_config(r->request_config, &fjt_module, session);
+    return session;
 }
 
 /* find_code_page() is a fixup hook that checks if the module is
