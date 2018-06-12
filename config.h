@@ -205,6 +205,9 @@ typedef struct config
 	char *m_pcNotLicensedPage;
 	int m_iNotConvert404;
 
+	int m_iApi;
+
+
 } config;
 
 

@@ -106,6 +106,7 @@ static int fjt_handler(request_rec *r) {
     if (strcmp(r->handler, "fjt")) {
         return DECLINED;
     }
+
     r->content_type = "text/html";
 
     if (!r->header_only){
@@ -117,12 +118,49 @@ static int fjt_handler(request_rec *r) {
             ap_internal_redirect(r->filename,r);
             return DONE;
         }
-
     }
 
     return OK;
 }
 
+
+static int apiHandler(request_rec *r){
+
+    if (strcmp(r->handler, "fjtapi")) {
+        return DECLINED;
+    }
+    apr_bucket_brigade *bb;
+    conn_rec *c;
+    apr_status_t rv;
+
+
+    c = r->connection;
+    int seen_eos = 0;
+    bb = apr_brigade_create(r->pool, c->bucket_alloc);
+    do {
+        apr_bucket *bucket;
+
+        rv = ap_get_brigade(r->input_filters, bb, AP_MODE_READBYTES,
+                            APR_BLOCK_READ, HUGE_STRING_LEN * 10);
+
+        if (rv != APR_SUCCESS) {
+            ap_log_rerror(APLOG_MARK, APLOG_ERR, rv, r, APLOGNO(01225)
+                    "Error reading request entity data");
+            return ap_map_http_request_error(rv, HTTP_BAD_REQUEST);
+        }
+
+        for (bucket = APR_BRIGADE_FIRST(bb);
+             bucket != APR_BRIGADE_SENTINEL(bb);
+             bucket = APR_BUCKET_NEXT(bucket)) {
+            if (APR_BUCKET_IS_EOS(bucket)) {
+                seen_eos = 1;
+                break;
+            }
+        }
+        ap_pass_brigade(r->output_filters, bb);
+    }while(seen_eos==0);
+    return OK;
+}
 
 
 /* stuff that sucks that I know of:
@@ -218,6 +256,10 @@ static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
     int len = strlen(f->r->filename);
     if(strnistr(f->r->filename,".woff2",len) || strnistr(f->r->filename,".woff",len) || strnistr(f->r->filename,".ttf",len)){
         shouldDo = 0;
+    }
+
+    if(strcmp(f->r->handler,"fjtapi")==0){
+        shouldDo = 1;
     }
 
     if(!shouldDo){
@@ -337,7 +379,7 @@ static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
         memstream *conv_stream = create_memstream(f->r->pool);
 
 //
-        if(strnistr(mime_type,"html",strlen(mime_type))){
+        if(mime_type!=NULL && strnistr(mime_type,"html",strlen(mime_type))){
             ParseHtml_html(f->r->pool,&ctx->pctx,dc,buf,nsize,conv_stream);
         }
         else{
@@ -471,6 +513,28 @@ static apr_status_t fjt_in_filter(ap_filter_t *f, apr_bucket_brigade *bb,
 
 }
 
+static fjtconf * registerSession(request_rec *r){
+    config *dc = ap_get_module_config(r->per_dir_config,
+                                      &fjt_module);
+
+    svr_config *svr_conf =
+            (svr_config *) ap_get_module_config(r->server->module_config, &fjt_module);
+    fjtconf *session = (fjtconf *) apr_palloc(r->pool, sizeof(fjtconf));
+    memset(session,0,sizeof(fjtconf));
+    session->p = r->pool;
+    session->pconfig = dc;
+    session->p = r->pool;
+    session->oldurl = r->filename;
+
+    session->pctx.r = r;
+    session->pctx.dir_conf = dc;
+    session->pctx.svr_conf = svr_conf;
+    session->ms_out = create_memstream(r->pool);
+    session->tmpbb =  apr_brigade_create(r->pool,r->connection->bucket_alloc);
+//        session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool,r->uri);
+    init_session(session,r,r->pool);
+    ap_set_module_config(r->request_config, &fjt_module, session);
+}
 
 /* find_code_page() is a fixup hook that checks if the module is
  * configured and the input or output potentially need to be translated.
@@ -488,6 +552,11 @@ static int find_code_page(request_rec *r) {
             "fjt find_code_page filename=%s,r->uri=%s,r->unparsed_uri=%s",
                   r->filename, r->uri, r->unparsed_uri);
 
+    if(dc->m_iApi==1){
+        r->handler = "fjtapi";
+        registerSession(r);
+        return OK;
+    }
 
     /* catch proxy requests */
     if (!r->proxyreq) {
@@ -501,20 +570,7 @@ static int find_code_page(request_rec *r) {
         return DECLINED;
     }
 
-    fjtconf *session = (fjtconf *) apr_palloc(r->pool, sizeof(fjtconf));
-    memset(session,0,sizeof(fjtconf));
-    session->p = r->pool;
-    session->pconfig = dc;
-    session->p = r->pool;
-    session->oldurl = r->filename;
-
-    session->pctx.r = r;
-    session->pctx.dir_conf = dc;
-    session->pctx.svr_conf = svr_conf;
-    session->ms_out = create_memstream(r->pool);
-    session->tmpbb =  apr_brigade_create(r->pool,r->connection->bucket_alloc);
-//        session->pctx.m_pcCurrentUrl = apr_pstrdup(r->pool,r->uri);
-    init_session(session,r,r->pool);
+    fjtconf *session = registerSession(r);
 
 
     char *pabsurl = r->filename + 6;
@@ -547,13 +603,8 @@ static int find_code_page(request_rec *r) {
     }
 
 
-
-
-
     //某些图片服务器，通过Referer来防止盗图
     apr_table_unset(r->headers_in,"Referer");
-
-    ap_set_module_config(r->request_config, &fjt_module, session);
 
     apr_table_set(r->subprocess_env, "ORIG_URL",r->filename);
 
@@ -712,9 +763,14 @@ static void fjt_insert_filter(request_rec *r)
     fjtconf *session = ap_get_module_config(r->request_config, &fjt_module);
 
     if (session!=NULL) {
-        ap_add_input_filter("fjt_in_filter", session, r,r->connection);
+        if(strcmp(r->handler,"fjtapi")) {
+            ap_add_input_filter("fjt_in_filter", session, r, r->connection);
+        }
         ap_add_output_filter("INFLATE", NULL, r, r->connection);
+
         ap_add_output_filter("fjt_out_filter", session, r, r->connection);
+
+
         printFilterChain(r);
         return;
     }
@@ -886,6 +942,9 @@ static const command_rec fjt_cmds[] = {
                      "是否convert 404 页面"),
         AP_INIT_TAKE1("InfoscapeNotLicensedPage", set_not_licensed_page, NULL, ACCESS_CONF,
                       "Set error page path, when the domain is not licensed."),
+
+        AP_INIT_FLAG("isApi", set_is_api, NULL, ACCESS_CONF,
+                     "是否api url"),
         {NULL}
 };
 
@@ -962,6 +1021,8 @@ static void fjt_register_hooks(apr_pool_t *p) {
 
     ap_hook_fixups(find_code_page, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_handler(fjt_handler, NULL, NULL, APR_HOOK_MIDDLE);
+    ap_hook_handler(apiHandler, NULL, NULL, APR_HOOK_MIDDLE);
+
     ap_hook_post_config(fjt_post_config, NULL, NULL, APR_HOOK_MIDDLE);
 
     ap_hook_insert_filter(fjt_insert_filter, NULL, NULL, APR_HOOK_REALLY_LAST);
@@ -1110,6 +1171,7 @@ static void *my_create_dir_conf(apr_pool_t *p, char *x) {
 
     /* Set up the default values for fields of dir */
 
+    conf->m_iApi = -1;
     return conf;
 }
 
@@ -1241,6 +1303,7 @@ static void *my_merge_dir_conf(apr_pool_t *pool, void *BASE, void *ADD) {
         conf->m_pcNotLicensedPage = add->m_pcNotLicensedPage?add->m_pcNotLicensedPage:base->m_pcNotLicensedPage;
 
         conf->m_iNotConvert404 = (add->m_iNotConvert404==-1) ? base->m_iNotConvert404:add->m_iNotConvert404;
+        conf->m_iApi = (add->m_iApi==-1) ? base->m_iApi:add->m_iApi;
     }
 
     //现在已经获得了configure, 开始初始化

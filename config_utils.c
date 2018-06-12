@@ -1640,3 +1640,12 @@ const char *set_not_convert_404(cmd_parms *cmd, void *dummy, int flag){
     return NULL;
 }
 
+const char *set_is_api(cmd_parms *cmd, void *dummy,int flag){
+    config *conf = (config*)dummy;
+    if(!conf){
+        return NULL;
+    }
+    conf->m_iApi = flag;
+    return NULL;
+}
+
