@@ -206,6 +206,9 @@ typedef struct config
 	int m_iNotConvert404;
 
 	int m_iApi;
+	int m_iApiOutEncode; //不写默认是utf8
+
+
 
 
 } config;

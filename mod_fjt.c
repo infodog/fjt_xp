@@ -812,6 +812,8 @@ static const command_rec fjt_cmds[] = {
                      "on if the the url end with js should not be added extra data even the mime is text/html"),
         AP_INIT_TAKE1("FromEncode", set_from_encode, NULL, ACCESS_CONF,
                       "Set the internal encoding of the real server."),
+        AP_INIT_TAKE1("ApiOutEncode", set_api_out_encode, NULL, ACCESS_CONF,
+                      "Set api output encode, can be GB2312 or BIG5."),
         AP_INIT_TAKE1("ToEncode", set_to_encode, NULL, ACCESS_CONF, "Set the external encoding of the real server."),
         AP_INIT_FLAG("ChangeUrlInServer", set_change_url_in_server, NULL, ACCESS_CONF,
                      "on if we should parse the html file and js file to change every url"),
@@ -1105,6 +1107,7 @@ static void *my_create_dir_conf(apr_pool_t *p, char *x) {
     conf->m_iExtraDataIgnoreJs = -1;
     conf->m_iFromEncode = -1;
     conf->m_iToEncode = -1;
+    conf->m_iApiOutEncode = -1;
     conf->m_iConvertWord = -1;
     conf->m_iIsUnicode = -1;
     conf->m_iIsUTF8 = -1;
@@ -1220,6 +1223,7 @@ static void *my_merge_dir_conf(apr_pool_t *pool, void *BASE, void *ADD) {
                                                                                    : add->m_iShouldChangeUrlInServer;
         conf->m_iFromEncode = (add->m_iFromEncode == -1) ? base->m_iFromEncode : add->m_iFromEncode;
         conf->m_iToEncode = (add->m_iFromEncode == -1) ? base->m_iToEncode : add->m_iToEncode;
+        conf->m_iApiOutEncode = (add->m_iApiOutEncode == -1) ? base->m_iApiOutEncode : add->m_iApiOutEncode;
         conf->m_iConvertWord = (add->m_iConvertWord == -1) ? base->m_iConvertWord : add->m_iConvertWord;
         conf->m_iIsUnicode = (add->m_iIsUnicode == -1) ? base->m_iIsUnicode : add->m_iIsUnicode;
         conf->m_iIsUTF8 = (add->m_iIsUTF8 == -1) ? 0 : add->m_iIsUTF8;

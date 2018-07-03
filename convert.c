@@ -2996,7 +2996,7 @@ int init_convert(pool *p)
 	/*if (!initunicode() || !initunicode_no2(p) || !InitOnlyUnicode(p))
 		return(0);*/
 
-	if(!InitOnlyUnicode(p)){
+	if(!InitOnlyUnicode(p) || !initunicode_no2(p)){
 	    return 0;
 	}
 	return(1);
@@ -3193,7 +3193,19 @@ int translate(int inOut,config *dc,char *inbuf, int insize,memstream *outStream,
         pconvertedUni[num+1] = 0;
 
         char *putf8 = apr_palloc(pool, num * 3);
-        num = unicode2utf8(pconvertedUni, num, 0, putf8);
+        if(dc->m_iApi==1 && dc->m_iApiOutEncode!=-1){
+        	char *ptable;
+        	if(dc->m_iApiOutEncode == GB2312){
+        		ptable = unicode2gb;
+        	}
+        	else if(dc->m_iApiOutEncode == BIG5){
+        		ptable = unicode2big;
+        	}
+			num = ConvertFromUnicode(ptable,FEFF,pconvertedUni,num,putf8);
+        }
+        else{
+        	num = unicode2utf8(pconvertedUni, num, 0, putf8);
+        }
         putf8[num] = 0;
         memstream_write(outStream,putf8,num);
     }

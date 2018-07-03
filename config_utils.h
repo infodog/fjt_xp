@@ -25,6 +25,8 @@ const char *set_extra_data_ignore_js(cmd_parms *cmd, void *dummy, int flag);
 const char *set_should_expand_js(cmd_parms *cmd, void *dummy, int flag);
 const char *set_from_encode(cmd_parms *cmd, void *dummy, const char *ss);
 const char *set_to_encode(cmd_parms *cmd, void *dummy, const char *ss);
+const char *set_api_out_encode(cmd_parms *cmd, void *dummy, const char *ss);
+
 const char *set_change_url_in_server(cmd_parms *cmd, void *dummy, int flag);
 const char *set_convert_word(cmd_parms *cmd, void *dummy, int flag);
 const char *set_is_unicode(cmd_parms *cmd, void *dummy, int flag);

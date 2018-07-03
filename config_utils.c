@@ -281,6 +281,22 @@ const char *set_from_encode(cmd_parms *cmd, void *dummy, const char *ss)
     return NULL;
 }
 
+const char *set_api_out_encode(cmd_parms *cmd, void *dummy, const char *ss){
+    config *conf = (config*)dummy;
+    if(!conf){
+        return NULL;
+    }
+    if (strnicmp(ss,"GB2312",6)==0)
+    {
+        conf->m_iApiOutEncode = ENCODE_GB2312;
+    }
+    else if (strnicmp(ss,"BIG5",4) == 0)
+    {
+        conf->m_iApiOutEncode = ENCODE_BIG5;
+    }
+    return NULL;
+}
+
 const char *set_to_encode(cmd_parms *cmd, void *dummy, const char *ss)
 {
     config *conf = (config*)dummy;
