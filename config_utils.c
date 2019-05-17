@@ -1665,3 +1665,30 @@ const char *set_is_api(cmd_parms *cmd, void *dummy,int flag){
     return NULL;
 }
 
+const char *set_convert_ext(cmd_parms *cmd, void *dummy,const char *ss){
+    config *conf = (config*)dummy;
+    if(!conf){
+        return NULL;
+    }
+    if (cmd->path == NULL)
+        return NULL;
+
+    if (conf->m_pConvertExts == NULL) {
+        conf->m_pConvertExts = apr_table_make(cmd->pool, 10);
+    }
+    apr_table_set(conf->m_pConvertExts, ss, ss);
+    return NULL;
+}
+
+const char *set_svr_convert_ext(cmd_parms *cmd, void *dummy,const char *ss){
+    server_rec *s = cmd->server;
+    svr_config *conf =
+            (svr_config *) ap_get_module_config(s->module_config, &fjt_module);
+
+
+    if (conf->m_pConvertExts == NULL) {
+        conf->m_pConvertExts = apr_table_make(cmd->pool, 10);
+    }
+    apr_table_set(conf->m_pConvertExts, ss, ss);
+    return NULL;
+}

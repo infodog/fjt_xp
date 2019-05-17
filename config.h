@@ -200,6 +200,7 @@ typedef struct config
 	table *m_pUrlModify;
 	table *m_pUrlMap;
 	table *m_pUseTableFile;
+
 	struct config *m_pnext;
 	struct config *m_pprev;
 	char *m_pcNotLicensedPage;
@@ -207,6 +208,9 @@ typedef struct config
 
 	int m_iApi;
 	int m_iApiOutEncode; //不写默认是utf8
+
+	//需要转换的后缀名
+    table *m_pConvertExts;
 
 
 
@@ -245,6 +249,10 @@ typedef struct svr_config
 	char *m_pcKeepUrlSuffix[100];
 	char *m_pcServerUrlPrefix[512];
 	int m_iKeepUrlSuffix;
+    //需要转换的后缀名
+    table *m_pConvertExts;
+
+
 } svr_config;
 
 typedef struct ConvertCtx

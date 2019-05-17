@@ -884,8 +884,11 @@ char * strnistr(char *s1, char *s2, int n)
 {
 	int i; 
 	int l; 
-	l = strlen(s2); 
-	for(i=0; i<n; i++)
+	l = strlen(s2);
+	if(n < l){
+	    return NULL;
+	}
+	for(i=0; i <= n-l; i++)
 	{
 		if (strnicmp(s1+i, s2, l)==0)
 		{
@@ -1344,6 +1347,45 @@ int KeepUrlSuffix(ConvertCtx *apCtx, config *dconf, char *pUrl)
 	return 0;
 }
 
+int isConvertExt(pool *apool, ConvertCtx *apCtx, config* pconf, svr_config *svr_conf, char *apurl, int nsize){
+    //判断是否需要将这个url进行转换
+    //1。如果这个url是绝对url,并且这个这个url的ext不在convertExt范围内的都不进行转换
+//    table  *pconf->m_pConvertExts;
+    //首先判断是否绝对链接
+    if(nsize<9){
+        //"https://"
+        return 1; //should  convert
+    }
+    if(strnicmp(apurl,"http://",7)!=0 && strnicmp(apurl,"https://",8)!=0){
+        //不是绝对链接
+        return 1;
+    }
+
+
+
+    table *convTable;
+
+    convTable = pconf->m_pConvertExts==NULL?svr_conf->m_pConvertExts : pconf->m_pConvertExts;
+
+    if(convTable == NULL){
+        return 1;
+    }
+
+    array_header* reqhdrs_arr = (array_header *) apr_table_elts(convTable);
+    table_entry * reqhdrs = (table_entry *) reqhdrs_arr->elts;
+
+    for (int i = 0; i < reqhdrs_arr->nelts; i++) {
+        char *ext = (char *) reqhdrs[i].key;
+        if(strnistr(apurl,ext,nsize)!=NULL){
+            //确实是需要转的
+            return 1;
+        }
+    }
+    return 0;
+}
+
+
+
 int ChangeUrl(pool *apool, ConvertCtx *apCtx, config* pconf, char *apurl, int nsize, char **pNewUrl, int *nNewUrl)
 {
 	char *pabsurl; 	
@@ -1360,16 +1402,23 @@ int ChangeUrl(pool *apool, ConvertCtx *apCtx, config* pconf, char *apurl, int ns
 		*pNewUrl = apurl; 
 		*nNewUrl = nsize; 
 		return 0; 
-	}	
+	}
+
 	if (pconf->m_iIgnoreUrlPrefix == 1 &&
 		(strnistr(apurl, pconf->m_pcUrlPrefix, nsize) != NULL ||
 		strnistr(apurl, pconf->m_pcSUrlPrefix, nsize) != NULL)
 		) {		
 		*pNewUrl = apurl; 
 		*nNewUrl = nsize; 
-		return 1; 
+		return 0;
 	}
-	
+
+	if(!isConvertExt(apool,apCtx,pconf,apCtx->svr_conf, apurl,nsize)){
+        *pNewUrl = apurl;
+        *nNewUrl = nsize;
+        return 0;
+    }
+
 	while (ptr < apurl + nsize) {
 
 	    //TODO:2018-4-20 zxy,好像不对呀，为啥要替换？
@@ -1377,6 +1426,7 @@ int ChangeUrl(pool *apool, ConvertCtx *apCtx, config* pconf, char *apurl, int ns
 			*ptr = '/';
 		}
 		else if (*ptr == '?') {
+
 			break; 
 		}
 		else if (*ptr == '*')  {
@@ -1400,6 +1450,8 @@ int ChangeUrl(pool *apool, ConvertCtx *apCtx, config* pconf, char *apurl, int ns
 			nsize--; 
 		}
 	}
+
+
 	
 	pabsurl = build_absolute_path(apool, apCtx, pconf, apurl, nsize); 
 	if (!pabsurl) {

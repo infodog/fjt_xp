@@ -6,9 +6,9 @@
 
 #下面的参数需要根据实际的路径进行调整
 builddir=.
-top_srcdir=/Users/zhengxiangyang/work/fjt/thirdParty/dist/httpd-2.4.29
-top_builddir=/Users/zhengxiangyang/work/fjt/thirdParty/dist/httpd-2.4.29
-include /Users/zhengxiangyang/work/fjt/thirdParty/dist/httpd-2.4.29/build/special.mk
+top_srcdir=/Users/zhengxiangyang/work/fjt/fjt_xp/buildScripts/fjtbuild/buildtemp/fjtv3ssl
+top_builddir=/Users/zhengxiangyang/work/fjt/fjt_xp/buildScripts/fjtbuild/buildtemp/fjtv3ssl
+include /Users/zhengxiangyang/work/fjt/fjt_xp/buildScripts/fjtbuild/buildtemp/fjtv3ssl/build/special.mk
 
 #   the used tools
 APACHECTL=apachectl

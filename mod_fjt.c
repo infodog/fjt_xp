@@ -238,11 +238,16 @@ static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
                 pfilename = UnChangeChinese(f->r->pool,dc,ctx,pfilename);
             }
             apr_table_setn(f->r->headers_out, "Location", pfilename);
+            f->r->status = 302;
             return APR_SUCCESS;
         }
         else if(dc->m_iNotConvert404){
             return ap_pass_brigade(f->next, bb);
         }
+    }
+
+    if(f->r->status==304){
+        return ap_pass_brigade(f->next, bb);
     }
 
     const char *mime_type = f->r->content_type;
@@ -914,6 +919,7 @@ static const command_rec fjt_cmds[] = {
                       "Set the Process Script Level."),
         AP_INIT_TAKE1("ScriptChangeChineseLevel", set_script_change_chinese_level, NULL, ACCESS_CONF,
                       "Set Change Chinese Level of script."),
+
         AP_INIT_TAKE1("ChangeScriptByDefault", set_change_script_by_default, NULL, ACCESS_CONF,
                       "In Process tag, if ChangeScriptByDefault is 1, then use ChangeScript instead of ReplaceHTTP."),
         AP_INIT_TAKE1("ValueChangeChinese", set_value_change_chinese, NULL, ACCESS_CONF,
@@ -948,6 +954,12 @@ static const command_rec fjt_cmds[] = {
 
         AP_INIT_FLAG("isApi", set_is_api, NULL, ACCESS_CONF,
                      "是否api url"),
+
+        AP_INIT_TAKE1("convertExt", set_convert_ext, NULL, ACCESS_CONF,
+                     "转换的文件后缀，比如 .html, .js , .txt等"),
+
+        AP_INIT_TAKE1("DefalutConvertExt", set_svr_convert_ext, NULL, RSRC_CONF,
+                      "默认转换的文件后缀，比如 .html, .js , .txt等"),
         {NULL}
 };
 
@@ -958,13 +970,15 @@ int init_dir_convert_table(config *pconfig, pool *p) {
 
     if (apr_table_get(pconfig->m_pUseTableFile, "default"))
         return 1;
-    reqhdrs_arr = (array_header *) apr_table_elts(pconfig->m_pUseTableFile);
-    reqhdrs = (table_entry *) reqhdrs_arr->elts;
+
 
     pconfig->m_usetable = (ruletable **) apr_palloc(p, sizeof(ruletable *) * FJTMAXWORD);
     pconfig->m_negtable = (ruletable **) apr_palloc(p, sizeof(ruletable *) * FJTMAXWORD);
     memset(pconfig->m_usetable, 0, sizeof(ruletable *) * FJTMAXWORD);
     memset(pconfig->m_negtable, 0, sizeof(ruletable *) * FJTMAXWORD);
+
+    reqhdrs_arr = (array_header *) apr_table_elts(pconfig->m_pUseTableFile);
+    reqhdrs = (table_entry *) reqhdrs_arr->elts;
 
     for (i = 0; i < reqhdrs_arr->nelts; i++) {
         int isUtf16 = 0;
@@ -1176,6 +1190,7 @@ static void *my_create_dir_conf(apr_pool_t *p, char *x) {
     /* Set up the default values for fields of dir */
 
     conf->m_iApi = -1;
+    conf->m_pConvertExts = NULL;
     return conf;
 }
 
@@ -1309,6 +1324,7 @@ static void *my_merge_dir_conf(apr_pool_t *pool, void *BASE, void *ADD) {
 
         conf->m_iNotConvert404 = (add->m_iNotConvert404==-1) ? base->m_iNotConvert404:add->m_iNotConvert404;
         conf->m_iApi = (add->m_iApi==-1) ? base->m_iApi:add->m_iApi;
+        conf->m_pConvertExts == NULL ? base->m_pConvertExts:add->m_pConvertExts;
     }
 
     //现在已经获得了configure, 开始初始化
@@ -1340,6 +1356,7 @@ static void *my_create_server_config(apr_pool_t *p, server_rec *s) {
     conf->m_iBinaryFileExt = 0;
     conf->m_iHtmlFileExt = 0;
     conf->m_iKeepUrlSuffix = 0;
+    conf->m_pConvertExts = NULL;
     return conf;
 }
 
@@ -1371,6 +1388,8 @@ static void *my_merge_svr_config(apr_pool_t *p, void *basev, void *overridesv) {
     newconf->m_iHtmlFileExt = base->m_iHtmlFileExt;
     memcpy(newconf->m_pcKeepUrlSuffix, base->m_pcKeepUrlSuffix, sizeof(newconf->m_pcKeepUrlSuffix));
     newconf->m_iKeepUrlSuffix = base->m_iKeepUrlSuffix;
+
+    newconf->m_pConvertExts = overrides->m_pConvertExts!=NULL?overrides->m_pConvertExts:base->m_pConvertExts;
     { /* // WPF 2003-9-12 */
         if (newconf->nYesDomain < 1) {
             ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
