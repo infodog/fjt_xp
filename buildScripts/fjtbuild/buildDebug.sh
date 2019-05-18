@@ -32,7 +32,7 @@ mkdir buildtemp
 export buildpath=$(pwd)/buildtemp
 
 #dist=/home/fjtv3ssl
-export dist=$home/fjtv3ssl
+export dist=$home
 mkdir $dist
 
 export httpd=httpd-2.4.38
