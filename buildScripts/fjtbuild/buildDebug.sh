@@ -1,9 +1,25 @@
+#!/usr/bin/env bash
+
 #yum install gcc-c++
 #yum install expat-devel
 #yum install automake
 #yum install libtool
 
-export home=$(pwd)
+
+#---------------------
+#作者：xiaoshang
+#来源：CSDN
+#原文：https://blog.csdn.net/s464036801/article/details/8283139
+#版权声明：本文为博主原创文章，转载请附上博文链接！
+
+if [ $FJT_HOME ];then
+    echo "fjt install path is $FJT_HOME"
+    export home=$FJT_HOME
+else
+    echo "ORACLE IS NOT EXISTS"
+    export home=$(pwd)
+fi
+
 mkdir buildtemp
 
 #dist=/home/fjtv3ssl
