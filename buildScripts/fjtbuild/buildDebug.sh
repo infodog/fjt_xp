@@ -15,7 +15,7 @@
 #版权声明：本文为博主原创文章，转载请附上博文链接！
 
 
-export srchome="$(pwd)/.."
+export srchome="$(pwd)/../.."
 if [ $FJT_HOME ];then
     echo "fjt install path is $FJT_HOME"
     export home=$FJT_HOME
