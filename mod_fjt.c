@@ -239,7 +239,7 @@ static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
             }
             apr_table_setn(f->r->headers_out, "Location", pfilename);
             f->r->status = 302;
-            return APR_SUCCESS;
+            return ap_pass_brigade(f->next, bb);
         }
         else if(dc->m_iNotConvert404){
             return ap_pass_brigade(f->next, bb);
@@ -248,6 +248,16 @@ static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
 
     if(f->r->status==304){
         return ap_pass_brigade(f->next, bb);
+    }
+
+    if(f->r->status == 302){
+        char * location = (char*)apr_table_get(f->r->headers_out,"Location");
+        char *newLocation;
+        int nNewLocation;
+        if(ChangeUrl(f->r->pool, &ctx->pctx, dc,location, strlen(location), &newLocation, &nNewLocation)){
+            apr_table_setn(f->r->headers_out, "Location", newLocation);
+        }
+        return ap_pass_brigade(f->next, bb);;
     }
 
     const char *mime_type = f->r->content_type;

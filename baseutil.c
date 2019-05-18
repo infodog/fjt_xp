@@ -1347,6 +1347,59 @@ int KeepUrlSuffix(ConvertCtx *apCtx, config *dconf, char *pUrl)
 	return 0;
 }
 
+char *getExt(char *apurl, int nurl,char *outbuf, int noutbuf){
+   //首先找到://
+   char *domain = strnistr(apurl,"://",nurl);
+   char *pb = NULL;
+   char *pend = apurl + nurl - 1;
+   if(domain==NULL){
+       pb = apurl;
+   }
+   else{
+       pb = domain + 3;
+   }
+   //从pb算起，找到第一个 '/'
+   pb = strnchr(pb,pend-pb+1,'/');
+   if(!pb){
+       return NULL;
+   }
+    //从pb开始找到'?/或者 '#'
+   char *rpe = NULL;
+   char *pt = pb;
+   while(pt <= pend){
+       if(*pt=='/' || *pt == '#'){
+            rpe = pt;
+            break;
+       }
+       pt++;
+   }
+   if(pb==rpe){
+       return NULL;
+   }
+
+   if(rpe==NULL){
+       rpe = pend;
+   }
+
+   pt = rpe;
+   while(pt >= pb){
+       if(*pt=='.'){
+           if(rpe - pt > 8){
+               return NULL;
+           }
+           else{
+               if(rpe-pt+1 < noutbuf){
+                   memcpy(outbuf,pt, rpe-pt+1);
+                   outbuf[rpe-pt+1] = 0;
+                   return outbuf;
+               }
+
+           }
+       }
+       pt--;
+   }
+   return NULL;
+}
 int isConvertExt(pool *apool, ConvertCtx *apCtx, config* pconf, svr_config *svr_conf, char *apurl, int nsize){
     //判断是否需要将这个url进行转换
     //1。如果这个url是绝对url,并且这个这个url的ext不在convertExt范围内的都不进行转换
@@ -1361,8 +1414,6 @@ int isConvertExt(pool *apool, ConvertCtx *apCtx, config* pconf, svr_config *svr_
         return 1;
     }
 
-
-
     table *convTable;
 
     convTable = pconf->m_pConvertExts==NULL?svr_conf->m_pConvertExts : pconf->m_pConvertExts;
@@ -1374,9 +1425,14 @@ int isConvertExt(pool *apool, ConvertCtx *apCtx, config* pconf, svr_config *svr_
     array_header* reqhdrs_arr = (array_header *) apr_table_elts(convTable);
     table_entry * reqhdrs = (table_entry *) reqhdrs_arr->elts;
 
+    char extbuf[256];
+    if(getExt(apurl,nsize,extbuf, sizeof(extbuf))==NULL){
+        return 1;
+    }
+
     for (int i = 0; i < reqhdrs_arr->nelts; i++) {
         char *ext = (char *) reqhdrs[i].key;
-        if(strnistr(apurl,ext,nsize)!=NULL){
+        if(stricmp(extbuf,ext)==0){
             //确实是需要转的
             return 1;
         }
