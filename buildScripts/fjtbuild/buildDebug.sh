@@ -14,6 +14,8 @@
 #原文：https://blog.csdn.net/s464036801/article/details/8283139
 #版权声明：本文为博主原创文章，转载请附上博文链接！
 
+
+export srchome="$(pwd)/.."
 if [ $FJT_HOME ];then
     echo "fjt install path is $FJT_HOME"
     export home=$FJT_HOME
@@ -126,3 +128,6 @@ make install
 # make install
 
 ##build fjt module的时候会碰到-Werror=的问题，只需要到/home/fjtv3ssl 目录下 grep -r Werror=就可以找到问题，修改一个配置文件就可以
+cd $srchome
+make
+make install
