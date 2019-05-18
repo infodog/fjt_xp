@@ -1,0 +1,3 @@
+#!/bin/sh
+/home/fjtv3ssl/bin/apachectl start
+

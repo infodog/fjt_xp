@@ -1,0 +1,73 @@
+#!/bin/sh
+
+if test ! -d ./fjtv3ssl ; then
+	echo ""
+	echo "This is a bad FJT software [can't find fjtv3ssl folder]"
+	echo ""
+	exit 0
+fi
+if test ! -e ./startfjt ; then
+        echo ""
+        echo "This is a bad FJT software [can't find startfjt file]"
+        echo ""
+        exit 0
+fi
+if test -z "$1" ; then
+	echo ""
+	echo "Usage: ./install ip-address or domain"
+	echo "such as: ./install 192.168.0.1"
+	echo "[ or ./install fjt.infoscape.com.cn ]"
+	echo ""
+	exit 0
+fi
+
+if test ! -e /etc/rc.d/init.d/startfjt ; then
+	cp -rf ./startfjt /etc/rc.d/init.d/
+	chmod 755 /etc/rc.d/init.d/startfjt
+	ln -s /etc/rc.d/init.d/startfjt /etc/rc.d/rc2.d/S88fjt
+	ln -s /etc/rc.d/init.d/startfjt /etc/rc.d/rc3.d/S88fjt
+	ln -s /etc/rc.d/init.d/startfjt /etc/rc.d/rc5.d/S88fjt
+fi
+
+if test ! -e /lib64/libssl.so.1.1 ; then
+    cp ./fjtv3ssl/openssl-1.1.1a/lib/libssl.so.1.1 /lib64/
+fi
+
+if test ! -e /lib64/libcrypto.so.1.1 ; then
+    cp ./fjtv3ssl/openssl-1.1.1a/lib/libcrypto.so.1.1 /lib64/
+fi
+
+if test -e /home/fjtv3ssl/logs/httpd.pid ; then
+	/home/fjtv3ssl/bin/apachectl stop
+fi
+if test -d /home/fjtv3ssl ; then
+	mv /home/fjtv3ssl /home/fjtv3ssl_old
+fi
+
+mkdir /home/fjtv3ssl
+cp -rf ./fjtv3ssl/* /home/fjtv3ssl/
+cp -rf ./fjtv3ssl/openssl-1.1.0g/lib/lib* /lib64/
+cd /home
+sed --expression s/p12.local.com/$1/g /home/fjtv3ssl/conf/httpd.conf > /home/fjtv3ssl/conf/httpd.conf.tmp
+rm -f /home/fjtv3ssl/conf/httpd.conf
+mv /home/fjtv3ssl/conf/httpd.conf.tmp /home/fjtv3ssl/conf/httpd.conf
+chmod o+w -R /home/fjtv3ssl/logs
+/home/fjtv3ssl/bin/apachectl start
+sleep 2
+
+if test -d /home/fjtv3ssl_old ; then
+	mv /home/fjtv3ssl_old /home/fjtv3ssl/
+fi
+
+if test -e /home/fjtv3ssl/logs/httpd.pid ; then
+	echo "FJT Installed Successfully!"	
+else
+	echo "Can't start FJT service!"
+fi
+
+# rm /etc/rc.d/init.d/startfjt
+# rm /etc/rc.d/rc2.d/S88fjt
+# rm /etc/rc.d/rc3.d/S88fjt
+# rm /etc/rc.d/rc5.d/S88fjt
+
+
