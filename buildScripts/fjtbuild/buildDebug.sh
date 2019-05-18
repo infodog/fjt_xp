@@ -129,5 +129,7 @@ make install
 
 ##build fjt module的时候会碰到-Werror=的问题，只需要到/home/fjtv3ssl 目录下 grep -r Werror=就可以找到问题，修改一个配置文件就可以
 cd $srchome
+echo $srchome
+echo $(pwd)
 make
 make install
