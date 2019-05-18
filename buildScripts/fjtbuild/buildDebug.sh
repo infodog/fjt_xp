@@ -19,10 +19,13 @@ export srchome="$(pwd)/../.."
 if [ $FJT_HOME ];then
     echo "fjt install path is $FJT_HOME"
     export home=$FJT_HOME
+    export debugmode="--enable-debugger-mode"
 else
     echo "ORACLE IS NOT EXISTS"
     export home=$(pwd)
+    export debugmode=""
 fi
+
 
 mkdir buildtemp
 export buildpath=$(pwd)/buildtemp
@@ -113,11 +116,23 @@ cd $buildpath/$httpd
 echo "cd $buildpath/$httpd"
 export LDFLAGS="-Wl,-rpath=$sslpath/lib"
 echo "please run following cmd line by hand"
-echo "./configure   --prefix=$dist --enable-debugger-mode --with-included-apr  --enable-modules=all --enable-deflate --with-z=$zlibpath --enable-rewrite=yes --enable-proxy_http=yes  --with-ssl=$sslpath --enable-ssl=yes --with-pcre=$pcrepath"
 
-./configure   --prefix=$dist --enable-debugger-mode --with-included-apr  --enable-modules=all --enable-deflate --with-z=$zlibpath --enable-rewrite=yes --enable-proxy_http=yes  --with-ssl=$sslpath --with-pcre=$pcrepath  --enable-ssl=yes
-make
-make install
+#本地调试请打开 --enable-debugger-mode
+#echo "./configure   --prefix=$dist --enable-debugger-mode --with-included-apr  --enable-modules=all --enable-deflate --with-z=$zlibpath --enable-rewrite=yes --enable-proxy_http=yes  --with-ssl=$sslpath --enable-ssl=yes --with-pcre=$pcrepath"
+echo "./configure $debugmode --prefix=$dist  --with-included-apr  --enable-modules=all --enable-deflate --with-z=$zlibpath --enable-rewrite=yes --enable-proxy_http=yes  --with-ssl=$sslpath --enable-ssl=yes --with-pcre=$pcrepath"
+
+if [ $FJT_HOME ];then
+    ./configure   --prefix=$dist $debugmode --with-included-apr  --enable-modules=all --enable-deflate --with-z=$zlibpath --enable-rewrite=yes --enable-proxy_http=yes  --with-ssl=$sslpath --with-pcre=$pcrepath  --enable-ssl=yes
+    make
+    make install
+
+    ##build fjt module的时候会碰到-Werror=的问题，只需要到/home/fjtv3ssl 目录下 grep -r Werror=就可以找到问题，修改一个配置文件就可以
+    cd $srchome
+    echo $srchome
+    echo $(pwd)
+    make
+    make install
+fi
 
 # cd $home
 # git clone https://github.com/infodog/fjt_xp.git
@@ -127,9 +142,3 @@ make install
 # make
 # make install
 
-##build fjt module的时候会碰到-Werror=的问题，只需要到/home/fjtv3ssl 目录下 grep -r Werror=就可以找到问题，修改一个配置文件就可以
-cd $srchome
-echo $srchome
-echo $(pwd)
-make
-make install
