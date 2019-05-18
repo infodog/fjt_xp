@@ -2,8 +2,10 @@
 
 #yum install gcc-c++
 #yum install expat-devel
+#yum install -y libxml2-devel
 #yum install automake
 #yum install libtool
+#yum install unzip
 
 
 #---------------------
@@ -21,9 +23,10 @@ else
 fi
 
 mkdir buildtemp
+export buildpath=$(pwd)/buildtemp
 
 #dist=/home/fjtv3ssl
-export dist=$home/buildtemp/fjtv3ssl
+export dist=$home/fjtv3ssl
 mkdir $dist
 
 export httpd=httpd-2.4.38
@@ -31,12 +34,12 @@ export ssllib=openssl-1.1.1b
 export ziplib=zlib-1.2.11
 export pcrelib=pcre-8.43
 
-export buildpath=$home/buildtemp/$httpd
+#export buildpath=$home/buildtemp/$httpd
 export sslpath=$dist/$ssllib
 export zlibpath=$dist/$ziplib
 export pcrepath=$dist/$pcrelib
 
-cd buildtemp
+cd $buildpath
 #get httpd 
 httpdurl=http://mirrors.tuna.tsinghua.edu.cn/apache//httpd/httpd-2.4.38.tar.gz
 curl $httpdurl --output httpd.tar.gz
@@ -79,40 +82,40 @@ tar xzf zlib.tar.gz
 
 unzip pcre.zip 
 
-cp -r apr-1.6.5 $home/buildtemp/$httpd/srclib/apr/
-cp -r apr-util-1.6.1 $home/buildtemp/$httpd/srclib/apr-util/
+cp -r apr-1.6.5 $buildpath/$httpd/srclib/apr/
+cp -r apr-util-1.6.1 $buildpath/$httpd/srclib/apr-util/
 
 
 # build zib
-cd $home/buildtemp/$ziplib
+cd $buildpath/$ziplib
 ./configure --prefix=$zlibpath 
 make
 make install
 
 
 # build openssl
-cd $home/buildtemp/$ssllib
+cd $buildpath/$ssllib
 ./config --debug --prefix=$sslpath  --openssldir=$sslpath/conf --with-zlib-include=$zlibpath/include  --with-zlib-lib=$zlibpath/lib zlib
 make 
 make install
 
 #build pcre
-echo "cd $home/buildtemp/$pcrelib"
-cd $home/buildtemp/$pcrelib
+echo "cd $buildpath/$pcrelib"
+cd $buildpath/$pcrelib
 ./configure --prefix=$pcrepath
 make 
 make install
 
 
-cd $home/buildtemp/$httpd
-echo "cd $home/buildtemp/$httpd"
+cd $buildpath/$httpd
+echo "cd $buildpath/$httpd"
 export LDFLAGS="-Wl,-rpath=$sslpath/lib"
 echo "please run following cmd line by hand"
 echo "./configure   --prefix=$dist --enable-debugger-mode --with-included-apr  --enable-modules=all --enable-deflate --with-z=$zlibpath --enable-rewrite=yes --enable-proxy_http=yes  --with-ssl=$sslpath --enable-ssl=yes --with-pcre=$pcrepath"
 
-#./configure   --prefix=$dist --enable-debugger-mode --with-included-apr  --enable-modules=all --enable-deflate --with-z=$zlibpath --enable-rewrite=yes --enable-proxy_http=yes  --with-ssl=$sslpath --with-pcre=$pcrepath  --enable-ssl=yes
-#make
-#make install
+./configure   --prefix=$dist --enable-debugger-mode --with-included-apr  --enable-modules=all --enable-deflate --with-z=$zlibpath --enable-rewrite=yes --enable-proxy_http=yes  --with-ssl=$sslpath --with-pcre=$pcrepath  --enable-ssl=yes
+make
+make install
 
 # cd $home
 # git clone https://github.com/infodog/fjt_xp.git
