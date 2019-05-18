@@ -19,11 +19,12 @@ export srchome="$(pwd)/../.."
 if [ $FJT_HOME ];then
     echo "fjt install path is $FJT_HOME"
     export home=$FJT_HOME
-    export debugmode="--enable-debugger-mode"
+    export debugmode=""
+
 else
     echo "ORACLE IS NOT EXISTS"
     export home=$(pwd)
-    export debugmode=""
+    export debugmode="--enable-debugger-mode"
 fi
 
 
