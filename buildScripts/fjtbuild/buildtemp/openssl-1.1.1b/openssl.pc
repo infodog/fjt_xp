@@ -1,0 +1,9 @@
+prefix=/Users/zhengxiangyang/work/fjt/fjt_xp/buildScripts/fjtbuild/buildtemp/fjtv3ssl/openssl-1.1.1b
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: OpenSSL
+Description: Secure Sockets Layer and cryptography libraries and tools
+Version: 1.1.1b
+Requires: libssl libcrypto

@@ -1,0 +1,32 @@
+<html>
+<title>Plug-in</title>
+
+<SCRIPT LANGUAGE=JavaScript>
+function StartInstall() {
+	window.open("plugin.exe");
+}
+
+function AbortInstall() {
+	window.close();
+}
+</script>
+
+<body bgcolor="#CCCCCC">
+
+Would you like to install a small (~70kb) plug-in that will let your browser show web fonts from this web server? 
+<br>
+<br>
+Simply run the program once it is downloaded.
+<br>
+<br>
+After installed! Please restart your browser for the plug-in to start working.
+<br>
+<br>
+
+<center>
+<input name=btnInstall type=button value="install" onclick="StartInstall()"></input>&nbsp;&nbsp;
+<input name=btnCancel type=button value="cancel" onclick="AbortInstall()"></input>
+</center>
+
+</body>
+</html>

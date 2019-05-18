@@ -1,0 +1,11 @@
+prefix=/Users/zhengxiangyang/work/fjt/fjt_xp/buildScripts/fjtbuild/buildtemp/fjtv3ssl
+exec_prefix=/Users/zhengxiangyang/work/fjt/fjt_xp/buildScripts/fjtbuild/buildtemp/fjtv3ssl
+libdir=${prefix}/lib
+APR_MAJOR_VERSION=1
+includedir=/Users/zhengxiangyang/work/fjt/fjt_xp/buildScripts/fjtbuild/buildtemp/fjtv3ssl/include
+
+Name: APR
+Description: The Apache Portable Runtime library
+Version: 1.6.5
+Libs: -L${libdir} -lapr-${APR_MAJOR_VERSION} -lpthread
+Cflags: -DDARWIN -DSIGPROCMASK_SETS_THREAD_MASK -DDARWIN_10 -g -O2 -I${includedir}

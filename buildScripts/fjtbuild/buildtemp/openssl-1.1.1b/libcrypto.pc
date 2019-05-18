@@ -1,0 +1,12 @@
+prefix=/Users/zhengxiangyang/work/fjt/fjt_xp/buildScripts/fjtbuild/buildtemp/fjtv3ssl/openssl-1.1.1b
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+enginesdir=${libdir}/engines-1.1
+
+Name: OpenSSL-libcrypto
+Description: OpenSSL cryptography library
+Version: 1.1.1b
+Libs: -L${libdir} -lcrypto
+Libs.private: -lz 
+Cflags: -I${includedir}
