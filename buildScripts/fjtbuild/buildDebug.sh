@@ -22,8 +22,9 @@ if [ $FJT_HOME ];then
     export debugmode=""
 
 else
-    echo "ORACLE IS NOT EXISTS"
-    export home=$(pwd)
+    export home=$(pwd)/fjtv3ssl
+    export FJT_HOME=$home
+    echo "fjt install path is $FJT_HOME"
     export debugmode="--enable-debugger-mode"
 fi
 

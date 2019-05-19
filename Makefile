@@ -6,9 +6,9 @@
 
 #下面的参数需要根据实际的路径进行调整
 builddir=.
-top_srcdir=$(dist)
-top_builddir=$(dist)
-include $(dist)/build/special.mk
+top_srcdir=$(FJT_HOME)
+top_builddir=$(FJT_HOME)
+include $(FJT_HOME)/build/special.mk
 
 #   the used tools
 APACHECTL=apachectl
