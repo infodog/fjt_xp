@@ -134,7 +134,7 @@ if [ $FJT_HOME ];then
     make
     make install
 
-    //复制 etc
+    #复制 etc
     cp -f $srchome/conf/httpd.conf $dist/conf/httpd.conf
     cp -r $srchome/etc $dist/etc
 
