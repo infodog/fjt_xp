@@ -133,6 +133,11 @@ if [ $FJT_HOME ];then
     echo $(pwd)
     make
     make install
+
+    //复制 etc
+    cp -f $srchome/conf/httpd.conf $dist/conf/httpd.conf
+    cp -r $srchome/etc $dist/etc
+
 fi
 
 # cd $home
