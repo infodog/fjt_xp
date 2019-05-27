@@ -252,7 +252,7 @@ static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
 
     if(f->r->status == 302 || f->r->status == 301){
         char * location = (char*)apr_table_get(f->r->headers_out,"Location");
-        if(location==null){
+        if(location==NULL){
             return ap_pass_brigade(f->next, bb);
         }
         char *newLocation;
