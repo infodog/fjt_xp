@@ -108,6 +108,10 @@ static int fjt_handler(request_rec *r) {
     }
 
     r->content_type = "text/html";
+    if(r->status==302){
+        ap_rputs("domain is not licensed. FJT is licensed  to FJT corporation.\n", r);
+        return DONE;
+    }
 
     if (!r->header_only){
         if(r->filename==NULL){
