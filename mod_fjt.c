@@ -250,8 +250,11 @@ static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
         return ap_pass_brigade(f->next, bb);
     }
 
-    if(f->r->status == 302){
+    if(f->r->status == 302 || f->r->status == 301){
         char * location = (char*)apr_table_get(f->r->headers_out,"Location");
+        if(location==null){
+            return ap_pass_brigade(f->next, bb);
+        }
         char *newLocation;
         int nNewLocation;
         if(ChangeUrl(f->r->pool, &ctx->pctx, dc,location, strlen(location), &newLocation, &nNewLocation)){

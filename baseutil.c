@@ -1454,6 +1454,7 @@ int ChangeUrl(pool *apool, ConvertCtx *apCtx, config* pconf, char *apurl, int ns
         *nNewUrl = nsize;
         return 0;
     }
+
 	if (nsize > 2048 || pconf->m_iShouldChangeUrlInServer == 0 || apCtx->nNotChangeTextboxUrl > 0) {
 		*pNewUrl = apurl; 
 		*nNewUrl = nsize; 
