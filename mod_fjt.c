@@ -230,6 +230,10 @@ static apr_status_t fjt_out_filter(ap_filter_t *f, apr_bucket_brigade *bb) {
 
     config *dc = ctx->pconfig;
 
+    if(strcmp(f->r->handler,"fjt")==0){
+        return ap_pass_brigade(f->next, bb);
+    }
+
 
     if(f->r->status == 404){
         char *oldurl = (char*) apr_table_get(f->r->subprocess_env, "OLDURL");
