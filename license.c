@@ -944,11 +944,11 @@ int CheckLicense(svr_config *conf, pool *p, char *domain)
         else 
             sscanf(g_cxLicense+5,"%i %i %i %i %i %i", &nYear1, &nMonth1, &nDay1, &nYear2,&nMonth2, &nDay2);	
         
-        if (nYear1>2020 || nYear1 < 2010)
+        if (nYear1>2120 || nYear1 < 2010)
             return 0;
         if (nMonth1 >12 || nMonth1 < 1)
             return 0;		
-        if (nYear2>2020 || nYear2 < 2010)
+        if (nYear2>2120 || nYear2 < 2010)
             return 0;
         if (nMonth2 >12 || nMonth2 < 1)
             return 0;
