@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-#yum install gcc-c++
-#yum install expat-devel
-#yum install -y libxml2-devel
-#yum install automake
-#yum install libtool
-#yum install unzip
+yum install gcc-c++
+yum install expat-devel
+yum install -y libxml2-devel
+yum install automake
+yum install libtool
+yum install unzip
 
 
 #---------------------
@@ -14,6 +14,7 @@
 #原文：https://blog.csdn.net/s464036801/article/details/8283139
 #版权声明：本文为博主原创文章，转载请附上博文链接！
 
+export FJT_HOME=/home/fjtv3ssl
 
 export srchome="$(pwd)/../.."
 if [ $FJT_HOME ];then
@@ -48,7 +49,8 @@ export pcrepath=$dist/$pcrelib
 
 cd $buildpath
 #get httpd 
-httpdurl=http://mirrors.tuna.tsinghua.edu.cn/apache//httpd/httpd-2.4.38.tar.gz
+#httpdurl=http://mirrors.tuna.tsinghua.edu.cn/apache/httpd/httpd-2.4.46.tar.gz
+httpdurl=http://archive.apache.org/dist/httpd/httpd-2.4.38.tar.gz
 curl $httpdurl --output httpd.tar.gz
 
 #get apr http://mirror.bit.edu.cn/apache//apr/apr-1.6.5.tar.gz
@@ -129,7 +131,9 @@ if [ $FJT_HOME ];then
     make install
 
     ##build fjt module的时候会碰到-Werror=的问题，只需要到/home/fjtv3ssl 目录下 grep -r Werror=就可以找到问题，修改一个配置文件就可以
+
     cd $srchome
+    touch .deps
     echo $srchome
     echo $(pwd)
     make
